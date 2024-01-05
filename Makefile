@@ -1,15 +1,13 @@
 CC=gcc
-CFLAGS=-W -Wall -Wextra -pedantic
+CFLAGS=-g -fsanitize=address,undefined -Wall -Wextra -pedantic
 SRC=src
 OBJ=obj
-SRCS=$(wildcard $(SRC)/**/*.c)
+SRCS=$(wildcard $(SRC)/*.c)
 OBJS=$(patsubst $(SRC)/%.c, $(OBJ)/%.o, $(SRCS))
-
 BINDIR=bin
 BIN=$(BINDIR)/main
-SUBMITNAME=env-check.zip
 
-all:$(BIN)
+all: $(BIN)
 
 release: CFLAGS=-Wall -O2 -DNDEBUG
 release: clean
@@ -23,7 +21,3 @@ $(OBJ)/%.o: $(SRC)/%.c
 
 clean:
 	$(RM) -r $(BINDIR)/* $(OBJ)/*
-
-submit:
-	$(RM) $(SUBMITNAME)
-	zip $(SUBMITNAME) $(BIN)

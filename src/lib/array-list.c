@@ -1,1 +1,0 @@
-/Users/michielnijenhuis/dotfiles/scripts/src/lib/array-list.c

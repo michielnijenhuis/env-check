@@ -1,1 +1,1 @@
-/Users/michielnijenhuis/dotfiles/scripts/src/lib/types.h
+/Users/michielnijenhuis/dotfiles/lib/types.h

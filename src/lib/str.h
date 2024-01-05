@@ -1,1 +1,1 @@
-/Users/michielnijenhuis/dotfiles/scripts/src/lib/str.h
+/Users/michielnijenhuis/dotfiles/lib/str.h

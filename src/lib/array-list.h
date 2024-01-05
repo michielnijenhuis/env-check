@@ -1,1 +1,1 @@
-/Users/michielnijenhuis/dotfiles/scripts/src/lib/array-list.h
+/Users/michielnijenhuis/dotfiles/lib/array-list.h
