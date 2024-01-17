@@ -2,6 +2,8 @@
 #include "lib/utils.h"
 #define ARRAY_LIST_IMPLEMENTATION
 #include "lib/array-list.h"
+#define HASH_TABLE_IMPLEMENTATION
+#include "lib/hash-table.h"
 #define CLI_IMPLEMENTATION
 #include "lib/cli.h"
 #include "lib/types.h"
@@ -13,6 +15,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define MALLOC_ERR printError("Memory allocation failed.")
+
 /*
 TODOS:
 * TODO: Implement Compare cmd opts
@@ -23,368 +27,433 @@ TODOS:
 * FIX: Print env var bug where color stm is printed if no value is printed
 */
 
-#define PROGRAM_NAME    "envcheck"
-#define PROGRAM_VERSION "0.0.0"
-
 typedef struct EnvVar {
-    cstr   name;
+    string name;
     string value;
 } EnvVar;
 
-// def
-ArrayList *readEnvFile(cstr path);
-void       sortEnvVariables(ArrayList *vars);
-void       compareEnvVariables(ArrayList *exampleEnv, ArrayList *env);
-boolean    isSameEnvVar(const EnvVar *a, const EnvVar *b);
-boolean    hasValue(const EnvVar *var);
-void       printEnvVar(const EnvVar *var, boolean withValue, boolean colored);
-int        list(Command *self);
-int        compare(Command *self);
+typedef void(EnvVarHandler)(void *, EnvVar *);
 
-// main
+void    freeEnvVar(void *var);
+EnvVar *createEnvVarFromLine(cstring line);
+void    pushEnvVarIntoArray(void *array, EnvVar *var);
+void    insertEnvVarIntoHashTable(void *hashTable, EnvVar *var);
+int     readEnvFile(void *source, cstring path, EnvVarHandler *handler, cstring ignore, cstring focus);
+int     readEnvFileIntoArray(ArrayList *variables, cstring path, cstring ignore, cstring focus);
+int     readEnvFileIntoHashTable(HashTable *table, cstring path, cstring ignore, cstring focus);
+usize   findMaxEnvFileKeyWidth(ArrayList *variables);
+void    trimString(string input);
+void    printEnvVar(EnvVar *var, int maxLength, boolean colored, boolean showValue);
+void    sortEnvVarsArray(ArrayList *array);
+boolean matchPattern(cstring str, cstring pattern);
+int     list(Command *self);
+int     compare(Command *self);
+
+/**
+ * Main
+ */
 int main(int argc, string argv[]) {
     /**
      * Compare
      */
-    Command compareCmd;
-    initCommand(&compareCmd, "cmp", "Compares two env files files.", compare);
-    // opts
-    Option cmp__targetOpt, cmp__sourceOpt, cmp__ignoreOpt, cmp__keyOpt, cmp__missingOpt, cmp__undefinedOpt,
-        cmp__divergentOpt, cmp__valuesOpt, cmp__exitOpt, cmp__coloredOpt;
-    initStringOption(&cmp__targetOpt, "t", "target", "Path to the .env file to compare with (default: .env)");
-    initStringOption(&cmp__sourceOpt, "s", "source", "Path to the .env file to compare to (default: .env.example)");
-    initStringOption(&cmp__ignoreOpt, "i", "ignore", "Comma seperated list of variable name patterns to ignore");
-    initStringOption(&cmp__keyOpt, "k", "key", "Comma seperated list of variable name patterns to focus on");
-    initBoolOption(&cmp__missingOpt, "m", "missing", "Show missing and empty variables");
-    initBoolOption(&cmp__undefinedOpt, "u", "undefined", "Show variables in the target that aren't in the source file");
-    initBoolOption(&cmp__divergentOpt, "d", "divergent", "Show variables with diverging values");
-    initBoolOption(&cmp__valuesOpt, "v", "values", "Include values in the results");
-    initBoolOption(&cmp__exitOpt, "e", "exit", "Exit the script if the target file has missing values");
-    initBoolOption(&cmp__coloredOpt, "c", "colored", "Print the results colored");
-    Option *cmd__opts[]  = {&cmp__targetOpt,
-                            &cmp__sourceOpt,
-                            &cmp__ignoreOpt,
-                            &cmp__keyOpt,
-                            &cmp__missingOpt,
-                            &cmp__undefinedOpt,
-                            &cmp__divergentOpt,
-                            &cmp__valuesOpt,
-                            &cmp__exitOpt,
-                            &cmp__coloredOpt};
-    compareCmd.opts      = cmd__opts;
-    compareCmd.optsCount = ARRAY_LEN(cmd__opts);
+    Command compareCmd     = createCommand("cmp", "Compares two env files files.", compare);
+    Option  cmp__targetOpt = createStringOption("t", "target", "Path to the .env file to compare with", "./.env");
+    Option  cmp__sourceOpt = createStringOption("s", "source", "Path to the .env file to compare to", "./.env.example");
+    Option  cmp__ignoreOpt =
+        createStringOption("i", "ignore", "Comma seperated list of variable name patterns to ignore", NULL);
+    Option cmp__keyOpt =
+        createStringOption("k", "key", "Comma seperated list of variable name patterns to focus on", NULL);
+    Option cmp__missingOpt = createBoolOption("m", "missing", "Show missing and empty variables");
+    Option cmp__undefinedOpt =
+        createBoolOption("u", "undefined", "Show variables in the target that aren't in the source file");
+    Option  cmp__divergentOpt = createBoolOption("d", "divergent", "Show variables with diverging values");
+    Option  cmp__valuesOpt    = createBoolOption("v", "values", "Include values in the results");
+    Option  cmp__exitOpt      = createBoolOption("e", "exit", "Exit the script if the target file has missing values");
+    Option  cmp__coloredOpt   = createBoolOption("c", "colored", "Print the results colored");
+    Option  cmp__printOpt     = createBoolOption("p", "print", "Print the keys and values side by side.");
+    Option *cmd__opts[]       = {&cmp__targetOpt,
+                                 &cmp__sourceOpt,
+                                 &cmp__ignoreOpt,
+                                 &cmp__keyOpt,
+                                 &cmp__missingOpt,
+                                 &cmp__undefinedOpt,
+                                 &cmp__divergentOpt,
+                                 &cmp__valuesOpt,
+                                 &cmp__exitOpt,
+                                 &cmp__coloredOpt,
+                                 &cmp__printOpt};
+    compareCmd.opts           = cmd__opts;
+    compareCmd.optsCount      = ARRAY_LEN(cmd__opts);
 
     /**
      * List
      */
-    Command listCmd;
-    initCommand(&listCmd, "list", "Lists all variables in the target env file, sorted alphabetically.", list);
+    Command listCmd = createCommand("list", "Lists all variables in the target env file, sorted alphabetically.", list);
     // opts
-    Option list__pathOpt, list__valuesOpt, list__coloredOpt;
-    initStringOption(&list__pathOpt, "p", "path", "Path to the .env file (default: .env.example)");
-    initBoolOption(&list__valuesOpt, "v", "values", "Include values in the list");
-    initBoolOption(&list__coloredOpt, "c", "colored", "Print the list colored");
-    Option *list__opts[] = {&list__pathOpt, &list__valuesOpt, &list__coloredOpt};
-    listCmd.opts         = list__opts;
-    listCmd.optsCount    = ARRAY_LEN(list__opts);
+    Option list__pathOpt = createStringOption("p", "path", "Path to the .env file", "./.env.example");
+    Option list__ignoreOpt =
+        createStringOption("i", "ignore", "Comma separated list of variable name patterns to ignore", NULL);
+    Option list__keyOpt =
+        createStringOption("k", "key", "Comma separated list of variable name patterns to focus on", NULL);
+    Option  list__valuesOpt  = createBoolOption("v", "values", "Include values in the list");
+    Option  list__coloredOpt = createBoolOption("c", "colored", "Print the list colored");
+    Option *list__opts[]     = {&list__pathOpt, &list__ignoreOpt, &list__keyOpt, &list__valuesOpt, &list__coloredOpt};
+    listCmd.opts             = list__opts;
+    listCmd.optsCount        = ARRAY_LEN(list__opts);
 
     /**
      * Env Check
      */
     Command *commands[] = {&compareCmd, &listCmd};
     Program  program    = {
-            .name          = PROGRAM_NAME,
-            .version       = PROGRAM_VERSION,
-            .commands      = commands,
-            .commandsCount = 2,
+            .executableName = "envc",
+            .name           = "Env Check",
+            .version        = "0.0.0",
+            .commands       = commands,
+            .commandsCount  = 2,
     };
 
     return runApplication(&program, argc, argv);
 }
 
-void printEnvVar(const EnvVar *var, boolean withValue, boolean colored) {
-    cstr   name      = var->name;
-    string nameColor = colored ? GREEN : NO_COLOUR;
+/**
+ * Helpers
+ */
+void freeEnvVar(void *var) {
+    free(((EnvVar *) var)->name);
+    free(((EnvVar *) var)->value);
+    free(var);
+}
 
-    if (!withValue) {
-        printf(" %s%-30.30s%s\n", nameColor, name, NO_COLOUR);
+void trimString(string input) {
+    if (input == NULL) {
         return;
     }
 
-    char   value[1024];
-    string varColor = NO_COLOUR;
+    // Trim line breaks at the end
+    usize length = strlen(input);
+    while (length > 0 && (input[length - 1] == '\n' || input[length - 1] == '\r')) {
+        input[--length] = '\0';
+    }
 
-    if (var->value == NULL || stringEquals(var->value, "null")) {
-        sprintf(value, "NULL");
+    // Remove quotes if present
+    if ((input[0] == '\'' && input[length - 1] == '\'') || (input[0] == '"' && input[length - 1] == '"')) {
+        memmove(input, input + 1, length - 2);
+        input[length - 2] = '\0';
+    }
+}
+
+// uses bubble sort
+void sortEnvVarsArray(ArrayList *array) {
+    if (array == NULL || array->items == NULL) {
+        return;
+    }
+
+    u32   len = array->length;
+    void *tmp = NULL;
+    for (u32 i = 0; i < len; ++i) {
+        for (u32 j = 0; j < len - 1 - i; ++j) {
+            EnvVar *a = arrayGet(array, j);
+            EnvVar *b = arrayGet(array, j + 1);
+
+            if (strcmp(a->name, b->name) > 0) {
+                // swap array[j] and array[j + 1]
+                tmp = arrayGet(array, j);
+                arraySet(array, j, arrayGet(array, j + 1));
+                arraySet(array, j + 1, tmp);
+            }
+        }
+    }
+}
+
+usize findMaxEnvFileKeyWidth(ArrayList *variables) {
+    usize maxLength = 0;
+    arrayForEach(variables, EnvVar * var) {
+        usize nameLength = strlen(var->name);
+        maxLength        = max(maxLength, nameLength);
+    }
+    return maxLength;
+}
+
+void printEnvVar(EnvVar *var, int maxLength, boolean colored, boolean showValue) {
+    cstr   name      = var->name;
+    string nameColor = colored ? GREEN : NO_COLOUR;
+
+    if (!showValue) {
+        printf("  %s%-30.30s%s\n", nameColor, name, NO_COLOUR);
+        return;
+    }
+
+    char    value[1024];
+    string  varColor = NO_COLOUR;
+    boolean isEmpty  = cstringIsEmpty(var->value);
+    boolean isBool = !isEmpty && (cstringEquals(var->value, "true") || cstringEquals(var->value, "false"));
+
+    if (isEmpty || cstringEquals(var->value, "null")) {
+        sprintf(value, "(NULL)");
         varColor = RED;
-    } else if (var->value != NULL) {
+    } else if (!isEmpty) {
         sprintf(value, "%s", var->value);
     }
 
-    printf(" %s%-30.30s%s%s%s\n", nameColor, name, varColor, value, NO_COLOUR);
+    if (isBool) {
+        varColor = CYAN;
+    }
+
+    printf("  %s%-*.*s%s%s%s\n", nameColor, maxLength + 4, maxLength, name, varColor, value, NO_COLOUR);
 }
 
-int list(Command *self) {
-    cstr    path       = getStringOpt(self->opts, self->optsCount, "path", "./.env.example");
-    boolean showValues = getBoolOpt(self->opts, self->optsCount, "values", false);
-    boolean colored    = getBoolOpt(self->opts, self->optsCount, "colored", false);
+EnvVar *createEnvVarFromLine(cstring line) {
+    if (line == NULL) {
+        return NULL;
+    }
 
-    printf("Path: %s\n", path);
-    return 0;
+    if (cstringStartsWith(line, "#") || cstringIsEmpty(line)) {
+        return NULL;
+    }
+
+    string name;
+    string value;
+    string delimPos = strchr(line, '=');
+
+    if (delimPos == NULL) {
+        return NULL;
+    }
+
+    usize nameLength = delimPos - line;
+    name             = (string) malloc((nameLength + 1) * sizeof(char));
+
+    if (name == NULL) {
+        MALLOC_ERR;
+        exit(EXIT_FAILURE);
+        /* NOT REACHED */
+    }
+
+    strncpy(name, line, nameLength);
+    name[nameLength]  = '\0';
+
+    usize valueLength = strlen(delimPos + 1);
+    value             = (string) malloc((valueLength + 1) * sizeof(char));
+
+    if (value == NULL) {
+        free(name);
+        MALLOC_ERR;
+        exit(EXIT_FAILURE);
+        /* NOT REACHED */
+    }
+
+    strcpy(value, delimPos + 1);
+    value[valueLength] = '\0';
+    trimString(value);
+
+    EnvVar *var = malloc(sizeof(*var));
+
+    if (var == NULL) {
+        free(name);
+        free(value);
+        MALLOC_ERR;
+        exit(EXIT_FAILURE);
+        /* NOT REACHED */
+    }
+
+    var->name  = name;
+    var->value = value;
+
+    return var;
+}
+
+int readEnvFile(void *source, cstring path, EnvVarHandler *handler, cstring ignore, cstring focus) {
+    if (source == NULL || path == NULL || handler == NULL) {
+        return EXIT_FAILURE;
+    }
 
     if (!fileExists(path)) {
-        char msg[256];
-        sprintf(msg, "File '%s' does not exist.", path);
-        panic(msg);
+        return fileNotFoundError(path);
     }
 
-    ArrayList *variables = readEnvFile(path);
-
-    if (variables == NULL) {
-        panic("Couldn't read environment variables.");
-    }
-
-    arrayForEach(variables, EnvVar * var) {
-        printEnvVar(var, showValues, colored);
-    }
-
-    arrayFree(variables);
-
-    return EXIT_SUCCESS;
-}
-
-int compare(Command *self) {
-    Option    *targetOpt           = self->opts[0];
-    Option    *sourceOpt           = self->opts[1];
-
-    string     examplePath         = sourceOpt->stringValue ? sourceOpt->stringValue : "./.env.example";
-    string     envPath             = targetOpt->stringValue ? targetOpt->stringValue : "./.env";
-
-    ArrayList *envExampleVariables = readEnvFile(examplePath);
-    ArrayList *envVariables        = readEnvFile(envPath);
-
-    if (envExampleVariables == NULL) {
-        panic("Couldn't read .env.example variables.");
-    }
-
-    if (envVariables == NULL) {
-        panic("Couldn't read .env variables.");
-    }
-
-    compareEnvVariables(envExampleVariables, envVariables);
-    arrayFree(envExampleVariables);
-    arrayFree(envVariables);
-
-    return EXIT_SUCCESS;
-}
-
-ArrayList *readEnvFile(cstr path) {
-    ArrayList *variables = newArray(sizeof(struct EnvVar), 50, free);
-
-    if (variables == NULL) {
-        panic("Failed to create Variables array.");
+    if (ignore != NULL && focus != NULL) {
+        printError("Cannot read env file while taking both ignore and focus arguments.");
+        return EXIT_FAILURE;
     }
 
     File  *file;
     string buffer = NULL;
     usize  len    = 0;
     ssize  read;
-
     file = fopen(path, "r");
+
     if (file == NULL) {
-        char msg[256];
-        sprintf(msg, "Failed to open file '%s'.\n", path);
-        panic(msg);
+        return failedToOpenFileError(path);
     }
 
+    // read file line by line and create env var struct from each line
     while ((read = getline(&buffer, &len, file)) != -1) {
-        if (stringStartsWith(buffer, "#") || stringIsEmpty(buffer)) {
+        EnvVar *var = createEnvVarFromLine(buffer);
+
+        if (var == NULL) {
             continue;
         }
 
-        string *fragments       = stringSplit(buffer, "=");
-        usize   fragmentsLength = ARRAY_LEN(fragments);
-
-        if (fragments != NULL) {
-            string name  = NULL;
-            string value = NULL;
-
-            if (fragments[0] != NULL) {
-                name = stringCopy(fragments[0]);
-                name = stringTrim(name);
-            }
-
-            if (!stringIsEmpty(name)) {
-                if (fragmentsLength >= 1) {
-                    usize            i = 1;
-                    struct ArrayList values;
-                    arrayInit(&values, sizeof(string), 5, free);
-                    string current = fragments[i];
-
-                    while (current != NULL) {
-                        arrayPush(&values, current);
-                        current = fragments[++i];
-                    }
-
-                    if (arrayLength(&values) > 0) {
-                        value = arrayJoin(&values, "=");
-                        if (stringIsEmpty(value)) {
-                            free(value);
-                            value = NULL;
-                        }
-                    }
-                }
-
-                EnvVar *envVar = malloc(sizeof(*envVar));
-                if (envVar != NULL) {
-                    envVar->name  = name;
-                    envVar->value = value;
-                    arrayPush(variables, envVar);
-                }
-            }
+        if (ignore != NULL && matchPattern(var->name, ignore)) {
+            continue;
         }
+
+        if (focus != NULL && !matchPattern(var->name, focus)) {
+            continue;
+        }
+
+        handler(source, var);
     }
 
+    // cleanup
     fclose(file);
-    sortEnvVariables(variables);
-
-    return variables;
+    return EXIT_SUCCESS;
 }
 
-void sortEnvVariables(ArrayList *variables) {
-    for (usize i = 0, n = arrayLength(variables); i < n; ++i) {
-        for (usize j = 0; j < n - 1 - i; ++j) {
-            EnvVar *a = arrayGet(variables, j);
-            EnvVar *b = arrayGet(variables, j + 1);
-
-            if (strcmp(a->name, b->name) > 0) {
-                arraySet(variables, j, b);
-                arraySet(variables, j + 1, a);
-            }
-        }
-    }
+void pushEnvVarIntoArray(void *array, EnvVar *var) {
+    arrayPushBack((ArrayList *) array, var);
 }
 
-boolean isSameEnvVar(const EnvVar *a, const EnvVar *b) {
-    if (a == b) {
+int readEnvFileIntoArray(ArrayList *variables, cstring path, cstring ignore, cstring focus) {
+    return readEnvFile(variables, path, pushEnvVarIntoArray, ignore, focus);
+}
+
+void insertEnvVarIntoHashTable(void *hashTable, EnvVar *var) {
+    hashTablePut((HashTable *) hashTable, var->name, var);
+}
+
+int readEnvFileIntoHashTable(HashTable *table, cstring path, cstring ignore, cstring focus) {
+    return readEnvFile(table, path, insertEnvVarIntoHashTable, ignore, focus);
+}
+
+boolean matchPattern(cstring str, cstring pattern) {
+    // Base case: both strings are empty, pattern matches
+    if (cstringIsEmpty(str) && cstringIsEmpty(pattern)) {
         return true;
     }
 
-    if (a == NULL || b == NULL) {
-        return false;
+    // If pattern has '*', try matching with and without consuming a character in the string
+    if (*pattern == '*') {
+        return matchPattern(str, pattern + 1) || (*str != '\0' && matchPattern(str + 1, pattern));
     }
 
-    return stringEquals(a->name, b->name);
+    // If pattern has '?' or characters match, move to the next character in both strings
+    if (*pattern == '?' || (*str != '\0' && *str == *pattern)) {
+        return matchPattern(str + 1, pattern + 1);
+    }
+
+    // None of the conditions match
+    return false;
 }
 
-boolean hasValue(const EnvVar *var) {
-    if (var == NULL) {
-        return false;
+/**
+ * List command impl
+ */
+int list(Command *self) {
+    string  path       = getStringOpt(self, "path");
+    string  ignore     = getStringOpt(self, "ignore");
+    string  key        = getStringOpt(self, "key");
+    boolean showValues = getBoolOpt(self, "values");
+    boolean colored    = getBoolOpt(self, "colored");
+
+    if (path == NULL || !fileExists(path)) {
+        return fileNotFoundError(path);
     }
 
-    return var->value != NULL && !stringIsEmpty(var->value);
+    // read env file
+    ArrayList variables = arrayCreate(sizeof(struct EnvVar), 50, freeEnvVar);
+    int       success   = readEnvFileIntoArray(&variables, path, ignore, key);
+
+    // sort env vars array
+    sortEnvVarsArray(&variables);
+
+    if (success > EXIT_SUCCESS) {
+        return EXIT_FAILURE;
+    }
+
+    // find max name width
+    usize maxLength = findMaxEnvFileKeyWidth(&variables);
+
+    // create title underline
+    usize pathLength = strlen(path);
+    char  underline[pathLength + 2];
+    for (usize i = 0; i < pathLength + 1; ++i) {
+        underline[i] = '-';
+    }
+    underline[pathLength + 1] = '\0';
+
+    // print title and underline
+    string titleColor = colored ? YELLOW : NO_COLOUR;
+    printf("%s%s:%s\n", titleColor, path, NO_COLOUR);
+    printf("%s%s%s\n", titleColor, underline, NO_COLOUR);
+
+    // print the sorted env vars
+    arrayForEach(&variables, EnvVar * var) {
+        printEnvVar(var, maxLength, colored, showValues);
+    }
+
+    // cleanup
+    arrayFree(&variables);
+
+    return EXIT_SUCCESS;
 }
 
-EnvVar *findVar(ArrayList *variables, cstr name) {
-    usize start = 0;
-    usize end   = arrayLength(variables) - 1;
+/**
+ * Compare command impl
+ */
+int compare(Command *self) {
+    string target = getStringOpt(self, "target");
+    string source = getStringOpt(self, "source");
+    string ignore = getStringOpt(self, "ignore");
+    string key    = getStringOpt(self, "key");
+    // boolean missing        = getBoolOpt(self, "missing");
+    // boolean undefined      = getBoolOpt(self, "undefined");
+    // boolean divergent      = getBoolOpt(self, "divergent");
+    // boolean showValues     = getBoolOpt(self, "values");
+    // boolean exitOnMismatch = getBoolOpt(self, "exit");
+    // boolean colored        = getBoolOpt(self, "colored");
+    // boolean print = getBoolOpt(self, "print");
 
-    while (start <= end) {
-        usize   middle = start + (end - start) / 2;
-        EnvVar *var    = arrayGet(variables, middle);
+    HashTableConfig  config = hashTableCreateConfig(true, false, false, free, freeEnvVar, NULL);
+    HashTableBucket *targetBuckets[50];
+    hashTableInitBuckets(targetBuckets, 50);
+    HashTable        targetTable = hashTableCreate(50, targetBuckets, &config);
+    HashTableBucket *sourceBuckets[50];
+    hashTableInitBuckets(sourceBuckets, 50);
+    HashTable sourceTable = hashTableCreate(50, sourceBuckets, &config);
 
-        if (var == NULL) {
-            break;
-        }
+    int success = readEnvFileIntoHashTable(&targetTable, target, ignore, key);
 
-        if (stringEquals(var->name, name)) {
-            return var;
-        }
-
-        if (strcmp(var->name, name) > 0) {
-            start = middle + 1;
-        } else {
-            end = middle - 1;
-        }
+    if (success > 0) {
+        hashTableDestroy(&targetTable);
+        return EXIT_FAILURE;
     }
 
-    return NULL;
-}
+    success = readEnvFileIntoHashTable(&sourceTable, source, ignore, key);
 
-boolean hasVar(ArrayList *variables, cstr name) {
-    EnvVar *var = findVar(variables, name);
-
-    return var != NULL;
-}
-
-void printCompareResults(ArrayList *variables, cstr title) {
-    printf("%s\n", title);
-    printf("---------------\n");
-    arrayForEach(variables, EnvVar * var) {
-        printEnvVar(var, false, true);
-        // printf("  * %s\n", Var->Name);
-    }
-    printf("\n");
-}
-
-void compareEnvVariables(ArrayList *exampleEnv, ArrayList *env) {
-    usize      aIndex    = 0;
-    usize      bIndex    = 0;
-    usize      aLen      = arrayLength(exampleEnv);
-    usize      bLen      = arrayLength(env);
-    ArrayList *missing   = newArray(sizeof(struct EnvVar), 10, free);
-    ArrayList *divergent = newArray(sizeof(struct EnvVar), 10, free);
-    ArrayList *empty     = newArray(sizeof(struct EnvVar), 10, free);
-    ArrayList *undefined = newArray(sizeof(struct EnvVar), 10, free);
-
-    while (aIndex < aLen || bIndex < bLen) {
-        EnvVar *a = arrayGet(exampleEnv, aIndex);
-        EnvVar *b = arrayGet(env, bIndex);
-
-        if (a == NULL) {
-            if (b == NULL) {
-                break;
-            }
-
-            arrayPush(undefined, b);
-            bIndex++;
-        } else if (b == NULL) {
-            arrayPush(missing, a);
-            aIndex++;
-        } else if (isSameEnvVar(a, b)) {
-            if (!hasValue(b)) {
-                arrayPush(empty, b);
-            } else if (hasValue(a) && !stringEquals(a->value, b->value)) {
-                arrayPush(divergent, b);
-            }
-            aIndex++;
-            bIndex++;
-        } else if (!hasVar(exampleEnv, b->name)) {
-            arrayPush(undefined, b);
-            bIndex++;
-        } else if (!hasVar(exampleEnv, a->name)) {
-            arrayPush(missing, a);
-            aIndex++;
-        }
+    if (success > 0) {
+        hashTableDestroy(&sourceTable);
+        return EXIT_FAILURE;
     }
 
-    if (arrayLength(missing)) {
-        printCompareResults(missing, "Missing");
-    }
-    arrayFree(missing);
+    // TODO: run comparison based on provided flags
+    usize   targetBufferSize = targetTable.size;
+    usize   sourceBufferSize = sourceTable.size;
+    cstring targetBuffer[targetBufferSize];
+    cstring sourceBuffer[sourceBufferSize];
+    hashTableKeysBuffer(&targetTable, targetBuffer, targetBufferSize);
+    hashTableKeysBuffer(&sourceTable, sourceBuffer, sourceBufferSize);
 
-    if (arrayLength(empty)) {
-        printCompareResults(empty, "Empty");
+    for (usize i = 0; i < targetBufferSize; i++) {
+        printf("Target var: %s\n", targetBuffer[i]);
     }
-    arrayFree(empty);
 
-    if (arrayLength(undefined)) {
-        printCompareResults(undefined, "Undefined");
+    for (usize i = 0; i < sourceBufferSize; i++) {
+        printf("Source var: %s\n", sourceBuffer[i]);
     }
-    arrayFree(undefined);
 
-    if (arrayLength(divergent)) {
-        printCompareResults(divergent, "Divergent");
-    }
-    arrayFree(divergent);
+    hashTableDestroy(&targetTable);
+    hashTableDestroy(&sourceTable);
+
+    return EXIT_FAILURE;
 }
