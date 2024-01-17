@@ -182,7 +182,7 @@ void printEnvVar(EnvVar *var, int maxLength, boolean colored, boolean showValue)
     char    value[1024];
     string  varColor = NO_COLOUR;
     boolean isEmpty  = cstringIsEmpty(var->value);
-    boolean isBool = !isEmpty && (cstringEquals(var->value, "true") || cstringEquals(var->value, "false"));
+    boolean isBool   = !isEmpty && (cstringEquals(var->value, "true") || cstringEquals(var->value, "false"));
 
     if (isEmpty || cstringEquals(var->value, "null")) {
         sprintf(value, "(NULL)");
@@ -417,16 +417,13 @@ int compare(Command *self) {
     hashTableInitBuckets(sourceBuckets, 50);
     HashTable sourceTable = hashTableCreate(50, sourceBuckets, &config);
 
-    int success = readEnvFileIntoHashTable(&targetTable, target, ignore, key);
-
-    if (success > 0) {
+    if (readEnvFileIntoHashTable(&targetTable, target, ignore, key) > 0) {
         hashTableDestroy(&targetTable);
         return EXIT_FAILURE;
     }
 
-    success = readEnvFileIntoHashTable(&sourceTable, source, ignore, key);
-
-    if (success > 0) {
+    if (readEnvFileIntoHashTable(&sourceTable, source, ignore, key) > 0) {
+        hashTableDestroy(&targetTable);
         hashTableDestroy(&sourceTable);
         return EXIT_FAILURE;
     }
