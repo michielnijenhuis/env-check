@@ -20,11 +20,6 @@
 /*
 TODOS:
 * TODO: Implement Compare cmd opts
-* TODO: Cleanup allocated memory
-* TODO: Improve error messages
-* TODO: Add coloring to usage
-* FIX: Compare cmd results
-* FIX: Print env var bug where color stm is printed if no value is printed
 */
 
 typedef struct EnvVar {
