@@ -36,11 +36,14 @@ void    insertEnvVarIntoHashTable(void *hashTable, EnvVar *var);
 int     readEnvFile(void *source, cstring path, EnvVarHandler *handler, cstring ignore, cstring focus);
 int     readEnvFileIntoArray(ArrayList *variables, cstring path, cstring ignore, cstring focus);
 int     readEnvFileIntoHashTable(HashTable *table, cstring path, cstring ignore, cstring focus);
-usize   findMaxEnvFileKeyWidth(ArrayList *variables);
+usize   findMaxEnvFileKeyWidthInArrayList(ArrayList *variables);
+usize   findMaxEnvFileWidthInArray(EnvVar **variables, usize variablesSize, boolean name);
 void    trimString(string input);
-void    printEnvVar(EnvVar *var, int maxLength, boolean colored, boolean showValue);
+void    printEnvVars(cstring key, cstring valueA, cstring valueB, int widthKey, int widthValueA, boolean colorized);
+void    printEnvVar(EnvVar *var, int maxLength, boolean colorized, boolean showValue);
 void    sortEnvVarsArray(ArrayList *array);
 boolean matchPattern(cstring str, cstring pattern);
+void    printTitle(cstring fileName, boolean colorized);
 int     list(Command *self);
 int     compare(Command *self);
 
@@ -64,8 +67,7 @@ int main(int argc, string argv[]) {
     Option  cmp__divergentOpt = createBoolOption("d", "divergent", "Show variables with diverging values");
     Option  cmp__valuesOpt    = createBoolOption("v", "values", "Include values in the results");
     Option  cmp__exitOpt      = createBoolOption("e", "exit", "Exit the script if the target file has missing values");
-    Option  cmp__coloredOpt   = createBoolOption("c", "colored", "Print the results colored");
-    Option  cmp__printOpt     = createBoolOption("p", "print", "Print the keys and values side by side.");
+    Option  cmp__colorizedOpt   = createBoolOption("c", "colorized", "Print the results colorized");
     Option *cmd__opts[]       = {&cmp__targetOpt,
                                  &cmp__sourceOpt,
                                  &cmp__ignoreOpt,
@@ -75,8 +77,7 @@ int main(int argc, string argv[]) {
                                  &cmp__divergentOpt,
                                  &cmp__valuesOpt,
                                  &cmp__exitOpt,
-                                 &cmp__coloredOpt,
-                                 &cmp__printOpt};
+                                 &cmp__colorizedOpt};
     compareCmd.opts           = cmd__opts;
     compareCmd.optsCount      = ARRAY_LEN(cmd__opts);
 
@@ -91,8 +92,8 @@ int main(int argc, string argv[]) {
     Option list__keyOpt =
         createStringOption("k", "key", "Comma separated list of variable name patterns to focus on", NULL);
     Option  list__valuesOpt  = createBoolOption("v", "values", "Include values in the list");
-    Option  list__coloredOpt = createBoolOption("c", "colored", "Print the list colored");
-    Option *list__opts[]     = {&list__pathOpt, &list__ignoreOpt, &list__keyOpt, &list__valuesOpt, &list__coloredOpt};
+    Option  list__colorizedOpt = createBoolOption("c", "colorized", "Print the list colorized");
+    Option *list__opts[]     = {&list__pathOpt, &list__ignoreOpt, &list__keyOpt, &list__valuesOpt, &list__colorizedOpt};
     listCmd.opts             = list__opts;
     listCmd.optsCount        = ARRAY_LEN(list__opts);
 
@@ -161,7 +162,7 @@ void sortEnvVarsArray(ArrayList *array) {
     }
 }
 
-usize findMaxEnvFileKeyWidth(ArrayList *variables) {
+usize findMaxEnvFileKeyWidthInArrayList(ArrayList *variables) {
     usize maxLength = 0;
     arrayForEach(variables, EnvVar * var) {
         usize nameLength = strlen(var->name);
@@ -170,9 +171,71 @@ usize findMaxEnvFileKeyWidth(ArrayList *variables) {
     return maxLength;
 }
 
-void printEnvVar(EnvVar *var, int maxLength, boolean colored, boolean showValue) {
+usize findMaxEnvFileWidthInArray(EnvVar **variables, usize variablesSize, boolean name) {
+    usize maxLength = 0;
+    for (usize i = 0; i < variablesSize; ++i) {
+        EnvVar *var = variables[i];
+        usize   len = 0;
+
+        if (!name && var->value != NULL) {
+            len = strlen(var->value);
+        } else if (name) {
+            len = strlen(var->name);
+        }
+        maxLength = max(maxLength, len);
+    }
+    return maxLength;
+}
+
+void printEnvVars(cstring key, cstring valueA, cstring valueB, int widthKey, int widthValueA, boolean colorized) {
+    string keyColor = colorized ? GREEN : NO_COLOUR;
+
+    if (valueA == NULL && valueB == NULL) {
+        printf("  %s%.*s%s%s\n", keyColor, widthKey, key, NO_COLOUR);
+        return;
+    }
+
+    boolean valueAIsEmpty = cstringIsEmpty(valueA);
+    boolean valueAIsBool  = !valueAIsEmpty && (cstringEquals(valueA, "true") || cstringEquals(valueA, "false"));
+    string  valueAColor   = valueAIsBool ? CYAN : NO_COLOUR;
+    boolean valueBIsEmpty = cstringIsEmpty(valueB);
+    boolean valueBIsBool  = !valueBIsEmpty && (cstringEquals(valueB, "true") || cstringEquals(valueB, "false"));
+    string  valueBColor   = valueBIsBool ? CYAN : NO_COLOUR;
+    char    __valueA[1024];
+    char    __valueB[1024];
+
+    if (valueAIsEmpty || cstringEquals(valueA, "null")) {
+        sprintf(__valueA, "(NULL)");
+        valueAColor = RED;
+    } else if (!valueAIsEmpty) {
+        sprintf(__valueA, "%s", valueA);
+    }
+
+    if (valueBIsEmpty || cstringEquals(valueB, "null")) {
+        sprintf(__valueB, "(NULL)");
+        valueBColor = RED;
+    } else if (!valueBIsEmpty) {
+        sprintf(__valueB, "%s", valueB);
+    }
+
+    printf("  %s%-*.*s%-*.*s%s%s%s%s\n",
+           keyColor,
+           widthKey + 4,
+           widthKey,
+           key,
+           widthValueA + 4,
+           widthValueA,
+           valueAColor,
+           __valueA,
+           NO_COLOUR,
+           valueBColor,
+           __valueB,
+           NO_COLOUR);
+}
+
+void printEnvVar(EnvVar *var, int maxLength, boolean colorized, boolean showValue) {
     cstr   name      = var->name;
-    string nameColor = colored ? GREEN : NO_COLOUR;
+    string nameColor = colorized ? GREEN : NO_COLOUR;
 
     if (!showValue) {
         printf("  %s%-30.30s%s\n", nameColor, name, NO_COLOUR);
@@ -186,12 +249,14 @@ void printEnvVar(EnvVar *var, int maxLength, boolean colored, boolean showValue)
 
     if (isEmpty || cstringEquals(var->value, "null")) {
         sprintf(value, "(NULL)");
-        varColor = RED;
+        if (colorized) {
+            varColor = RED;
+        }
     } else if (!isEmpty) {
         sprintf(value, "%s", var->value);
     }
 
-    if (isBool) {
+    if (colorized && isBool) {
         varColor = CYAN;
     }
 
@@ -289,11 +354,14 @@ int readEnvFile(void *source, cstring path, EnvVarHandler *handler, cstring igno
             continue;
         }
 
+        // TODO: move ignore and focus check to createEnvVarFromLine()
         if (ignore != NULL && matchPattern(var->name, ignore)) {
+            freeEnvVar(var);
             continue;
         }
 
         if (focus != NULL && !matchPattern(var->name, focus)) {
+            freeEnvVar(var);
             continue;
         }
 
@@ -341,6 +409,21 @@ boolean matchPattern(cstring str, cstring pattern) {
     return false;
 }
 
+void printTitle(cstring fileName, boolean colorized) {
+    // create title underline
+    usize pathLength = strlen(fileName);
+    char  underline[pathLength + 1];
+    for (usize i = 0; i < pathLength; ++i) {
+        underline[i] = '-';
+    }
+    underline[pathLength] = '\0';
+
+    // print title and underline
+    string titleColor = colorized ? YELLOW : NO_COLOUR;
+    printf("%s%s%s\n", titleColor, fileName, NO_COLOUR);
+    printf("%s%s%s\n", titleColor, underline, NO_COLOUR);
+}
+
 /**
  * List command impl
  */
@@ -349,7 +432,7 @@ int list(Command *self) {
     string  ignore     = getStringOpt(self, "ignore");
     string  key        = getStringOpt(self, "key");
     boolean showValues = getBoolOpt(self, "values");
-    boolean colored    = getBoolOpt(self, "colored");
+    boolean colorized    = getBoolOpt(self, "colorized");
 
     if (path == NULL || !fileExists(path)) {
         return fileNotFoundError(path);
@@ -367,24 +450,13 @@ int list(Command *self) {
     }
 
     // find max name width
-    usize maxLength = findMaxEnvFileKeyWidth(&variables);
+    usize maxLength = findMaxEnvFileKeyWidthInArrayList(&variables);
 
-    // create title underline
-    usize pathLength = strlen(path);
-    char  underline[pathLength + 2];
-    for (usize i = 0; i < pathLength + 1; ++i) {
-        underline[i] = '-';
-    }
-    underline[pathLength + 1] = '\0';
-
-    // print title and underline
-    string titleColor = colored ? YELLOW : NO_COLOUR;
-    printf("%s%s:%s\n", titleColor, path, NO_COLOUR);
-    printf("%s%s%s\n", titleColor, underline, NO_COLOUR);
+    printTitle(path, colorized);
 
     // print the sorted env vars
     arrayForEach(&variables, EnvVar * var) {
-        printEnvVar(var, maxLength, colored, showValues);
+        printEnvVar(var, maxLength, colorized, showValues);
     }
 
     // cleanup
@@ -397,16 +469,16 @@ int list(Command *self) {
  * Compare command impl
  */
 int compare(Command *self) {
-    string target = getStringOpt(self, "target");
-    string source = getStringOpt(self, "source");
-    string ignore = getStringOpt(self, "ignore");
-    string key    = getStringOpt(self, "key");
-    // boolean missing        = getBoolOpt(self, "missing");
-    // boolean undefined      = getBoolOpt(self, "undefined");
-    // boolean divergent      = getBoolOpt(self, "divergent");
-    // boolean showValues     = getBoolOpt(self, "values");
-    // boolean exitOnMismatch = getBoolOpt(self, "exit");
-    // boolean colored        = getBoolOpt(self, "colored");
+    string  target         = getStringOpt(self, "target");
+    string  source         = getStringOpt(self, "source");
+    string  ignore         = getStringOpt(self, "ignore");
+    string  key            = getStringOpt(self, "key");
+    boolean missing        = getBoolOpt(self, "missing");
+    boolean undefined      = getBoolOpt(self, "undefined");
+    boolean divergent      = getBoolOpt(self, "divergent");
+    boolean showValues     = getBoolOpt(self, "values");
+    boolean exitOnMismatch = getBoolOpt(self, "exit");
+    boolean colorized        = getBoolOpt(self, "colorized");
     // boolean print = getBoolOpt(self, "print");
 
     HashTableConfig  config = hashTableCreateConfig(true, false, false, free, freeEnvVar, NULL);
@@ -428,24 +500,107 @@ int compare(Command *self) {
         return EXIT_FAILURE;
     }
 
-    // TODO: run comparison based on provided flags
-    usize   targetBufferSize = targetTable.size;
-    usize   sourceBufferSize = sourceTable.size;
-    cstring targetBuffer[targetBufferSize];
-    cstring sourceBuffer[sourceBufferSize];
-    hashTableKeysBuffer(&targetTable, targetBuffer, targetBufferSize);
-    hashTableKeysBuffer(&sourceTable, sourceBuffer, sourceBufferSize);
+    usize   maxSize      = max(targetTable.size, sourceTable.size);
+    boolean selective    = missing || undefined || divergent;
 
-    for (usize i = 0; i < targetBufferSize; i++) {
-        printf("Target var: %s\n", targetBuffer[i]);
+    usize   missingIndex = 0;
+    EnvVar *missingVars[maxSize];
+    usize   divergentIndex = 0;
+    EnvVar *divergentVars[maxSize];
+    usize   undefinedIndex = 0;
+    EnvVar *undefinedVars[maxSize];
+
+    usize   sourceSize = sourceTable.size;
+    cstring sourceKeys[sourceSize];
+    hashTableKeysBuffer(&sourceTable, sourceKeys, sourceSize);
+
+    usize   targetSize = targetTable.size;
+    cstring targetKeys[targetSize];
+    hashTableKeysBuffer(&targetTable, targetKeys, targetSize);
+
+    for (usize i = 0; i < sourceSize; ++i) {
+        EnvVar *targetVar = hashTableGet(&targetTable, sourceKeys[i]);
+        EnvVar *sourceVar = hashTableGet(&sourceTable, sourceKeys[i]);
+
+        if (targetVar == NULL) {
+            // case: key is not present in target file, but source has default value
+            if (!cstringIsEmpty(sourceVar->value)) {
+                missingVars[missingIndex++] = targetVar;
+            }
+        } else {
+            boolean hasValue = !cstringIsEmpty(targetVar->value);
+
+            // case: key exists but has no value, while source file has value
+            if (!cstringIsEmpty(sourceVar->value) && !hasValue) {
+                missingVars[missingIndex++] = targetVar;
+            }
+            // case: both have value, but value is different
+            else if (hasValue && !cstringEquals(targetVar->value, sourceVar->value)) {
+                divergentVars[divergentIndex++] = targetVar;
+            }
+        }
     }
 
-    for (usize i = 0; i < sourceBufferSize; i++) {
-        printf("Source var: %s\n", sourceBuffer[i]);
+    // check if any keys in in the target file exist that do not exist in the source file
+    for (usize i = 0; i < targetSize; ++i) {
+        EnvVar *sourceVar = hashTableGet(&sourceTable, targetKeys[i]);
+
+        if (sourceVar == NULL) {
+            undefinedVars[undefinedIndex++] = hashTableGet(&targetTable, targetKeys[i]);
+        }
+    }
+
+    char title[FILENAME_MAX];
+    sprintf(title, "Comparing '%s' to '%s'", target, source);
+    printTitle(title, colorized);
+
+    usize maxWidthA        = findMaxEnvFileWidthInArray(missingVars, missingIndex, true);
+    usize maxWidthB        = findMaxEnvFileWidthInArray(divergentVars, divergentIndex, true);
+    usize maxWidthC        = findMaxEnvFileWidthInArray(undefinedVars, undefinedIndex, true);
+    usize maxWidth         = max(maxWidthA, maxWidthB);
+    maxWidth               = max(maxWidth, maxWidthC);
+
+    boolean printMissing   = missingIndex > 0 && (!selective || missing);
+    boolean printDivergent = divergentIndex > 0 && (!selective || divergent);
+    boolean printUndefined = undefinedIndex > 0 && (!selective || undefined);
+
+    // TODO: if showValues == true, print results in 3-column format, including headers
+
+    if (printMissing) {
+        printf("%sMissing:\n%s", WHITE_BOLD, NO_COLOUR);
+        for (usize i = 0; i < missingIndex; ++i) {
+            printEnvVar(missingVars[i], maxWidth, colorized, false);
+        }
+    }
+
+    if (printDivergent) {
+        if (printMissing) {
+            printf("\n");
+        }
+
+        // find key width
+        // find valueA width
+
+        printf("%sDivergent:\n%s", WHITE_BOLD, NO_COLOUR);
+        for (usize i = 0; i < divergentIndex; ++i) {
+            // EnvVar *var = divergentVars[i];
+            printEnvVar(divergentVars[i], maxWidth, colorized, showValues);
+        }
+    }
+
+    if (printUndefined) {
+        if (printMissing || printDivergent) {
+            printf("\n");
+        }
+
+        printf("%sUndefined:\n%s", WHITE_BOLD, NO_COLOUR);
+        for (usize i = 0; i < undefinedIndex; ++i) {
+            printEnvVar(undefinedVars[i], maxWidth, colorized, showValues);
+        }
     }
 
     hashTableDestroy(&targetTable);
     hashTableDestroy(&sourceTable);
 
-    return EXIT_FAILURE;
+    return exitOnMismatch && missingIndex > 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
