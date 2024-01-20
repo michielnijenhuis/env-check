@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-g -fsanitize=address,undefined -Wall -Wextra -pedantic
+CFLAGS=-g -fsanitize=address,undefined -Wall -Wextra -Werror=implicit -pedantic
 SRC=src
 OBJ=obj
 SRCS=$(wildcard $(SRC)/*.c)
@@ -9,7 +9,7 @@ BIN=$(BINDIR)/main
 
 all: $(BIN)
 
-release: CFLAGS=-Wall -O2 -DNDEBUG
+release: CFLAGS=-Wall -O3 -flto -funroll-loops -mtune=native -DNDEBUG
 release: clean
 release: $(BIN)
 
