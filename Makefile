@@ -10,6 +10,7 @@ BIN=$(BINDIR)/main
 all: $(BIN)
 
 release: CFLAGS=-Wall -O3 -flto -funroll-loops -mtune=native -DNDEBUG
+	SRC=release
 release: clean
 release: $(BIN)
 
