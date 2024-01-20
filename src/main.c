@@ -22,7 +22,7 @@
 //=== Defines ================================================================//
 #define ENVC_EXECUTABLE "envc"
 #define ENVC_NAME "Env Check"
-#define ENVC_VERSION "1.0.0"
+#define ENVC_VERSION "1.0.1"
 #define MALLOC_ERR printError("Memory allocation failed.")
 
 //=== Typedefs ===============================================================//
@@ -408,16 +408,16 @@ void createEnvVarFromLine(HashTable *table,
 }
 
 void setEnvVarStatus(EnvVar *var) {
-    boolean valueIsEmpty        = cstringIsEmpty(var->value) || cstringEquals(var->value, "null");
-    boolean compareValueIsEmpty = cstringIsEmpty(var->compareValue) || cstringEquals(var->compareValue, "null");
+    boolean valueIsEmpty        = cstringIsEmpty(var->value);
+    boolean compareValueIsEmpty = cstringIsEmpty(var->compareValue);
 
-    if (compareValueIsEmpty) {
+    if (var->value != NULL && compareValueIsEmpty) {
         var->status = MISSING;
         return;
     }
 
     if (var->value == NULL) {
-        if (!compareValueIsEmpty) {
+        if (var->compareValue != NULL) {
             var->status = UNDEFINED;
         } else {
             var->status = OK;
