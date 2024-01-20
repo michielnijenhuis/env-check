@@ -5,7 +5,9 @@ fi
 cd "src/lib"
 
 function symlink_lib() {
-    ln -sf "$HOME/dotfiles/lib/$1.h" "$(pwd)"
+    for lib in $@; do
+        ln -sf "$HOME/dotfiles/lib/$lib.h" "$(pwd)";
+    done
 }
 
 symlink_lib "array-list" "cli" "cstring" "hash-table" "types" "utils"
