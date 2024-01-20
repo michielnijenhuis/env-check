@@ -22,7 +22,7 @@
 //=== Defines ================================================================//
 #define ENVC_EXECUTABLE "envc"
 #define ENVC_NAME "Env Check"
-#define ENVC_VERSION "1.0.0"
+#define ENVC_VERSION "1.0.1"
 #define MALLOC_ERR printError("Memory allocation failed.")
 
 //=== Typedefs ===============================================================//
