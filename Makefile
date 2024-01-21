@@ -1,6 +1,6 @@
 CC=gcc
 VERSION=$(shell git describe --tags --abbrev=0 | sed 's/^v//')
-CFLAGS=-g -fsanitize=address,undefined -Wall -Wextra -Werror=implicit -pedantic -DENVC_VERSION=\"$(VERSION)\"
+CFLAGS=-g -fsanitize=address,undefined -Wall -Wextra -Wpedantic -Wfloat-equal -Werror=implicit -DENVC_VERSION=\"$(VERSION)\"
 SRC=src
 OBJ=obj
 SRCS=$(wildcard $(SRC)/*.c)
