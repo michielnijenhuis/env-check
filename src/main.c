@@ -40,7 +40,6 @@ typedef struct EnvVar {
     usize        nameLength;
     usize        valueLength;
     usize        compareValueLength;
-    boolean      isDouble;
 } EnvVar;
 
 //=== Defs ===================================================================//
@@ -66,6 +65,11 @@ usize   findMaxWidthInArray(EnvVar **variables,
                             boolean  name);
 void    trimString(string input);
 boolean isNumeric(cstring str);
+void    prepareValueForPrinting(cstring value,
+                                usize   valueLength,
+                                string  buffer,
+                                boolean isEmpty,
+                                uint    colWidth);
 void    printEnvVar(const EnvVar *var,
                     uint          firstColumnWidth,
                     uint          secondColumnWidth,
@@ -243,6 +247,25 @@ usize findMaxWidthInArray(EnvVar **variables,
     return maxLength;
 }
 
+void prepareValueForPrinting(cstring value,
+                             usize   valueLength,
+                             string  buffer,
+                             boolean isEmpty,
+                             uint    colWidth) {
+    if (isEmpty) {
+        sprintf(buffer, "(NULL)");
+        return;
+    }
+
+    if (valueLength > colWidth) {
+        strncpy(buffer, value, colWidth - 3);
+        strcat(buffer, "...");
+        buffer[colWidth] = '\0';
+    } else {
+        sprintf(buffer, "%s", value);
+    }
+}
+
 void printEnvVar(const EnvVar *var,
                  uint          firstColumnWidth,
                  uint          secondColumnWidth,
@@ -274,31 +297,25 @@ void printEnvVar(const EnvVar *var,
     char    __valueA[valueASize];
     char    __valueB[valueBSize];
 
+    prepareValueForPrinting(var->value,
+                            var->valueLength,
+                            __valueA,
+                            valueAIsEmpty,
+                            secondColumnWidth);
+
     if (valueAIsEmpty) {
-        sprintf(__valueA, "(NULL)");
         valueAColor = DARK_GRAY;
-    } else if (!valueAIsEmpty) {
-        if (var->valueLength > secondColumnWidth) {
-            strncpy(__valueA, var->value, secondColumnWidth - 3);
-            strcat(__valueA, "...");
-            __valueA[secondColumnWidth] = '\0';
-        } else {
-            sprintf(__valueA, "%s", var->value);
-        }
     }
 
     if (comparing) {
+        prepareValueForPrinting(var->compareValue,
+                                var->compareValueLength,
+                                __valueB,
+                                valueBIsEmpty,
+                                thirdColumnWidth);
+
         if (valueBIsEmpty) {
-            sprintf(__valueB, "(NULL)");
             valueBColor = RED;
-        } else if (!valueBIsEmpty) {
-            if (var->compareValueLength > thirdColumnWidth) {
-                strncpy(__valueB, var->compareValue, thirdColumnWidth - 4);
-                strcat(__valueB, "...");
-                __valueB[thirdColumnWidth] = '\0';
-            } else {
-                sprintf(__valueB, "%s", var->compareValue);
-            }
         }
     }
 
@@ -425,10 +442,6 @@ void createEnvVarFromLine(HashTable *table,
 
     EnvVar *var = hashTableGet(table, name);
     if (var != NULL) {
-        if (!comparing || var->compareValue != NULL) {
-            var->isDouble = true;
-        }
-
         if (comparing && var->compareValue == NULL) {
             var->compareValue       = value;
             var->compareValueLength = valueLength;
