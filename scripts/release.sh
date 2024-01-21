@@ -15,4 +15,4 @@ done
 
 cp "src/main.c" "release/main.c"
 
-make release
+make SRC=release release

@@ -74,6 +74,7 @@ void    printEnvVar(const EnvVar *var,
 void    sortEnvVarsArray(cstring *keys, usize size);
 boolean matchPattern(cstring str, cstring pattern);
 void    printTitle(cstring fileName);
+int     handleCommand(Command *self);
 int     list(Command *self);
 int     compare(Command *self);
 
@@ -135,13 +136,14 @@ int main(int argc, string argv[]) {
         "list",
         "Lists all variables in the target env file, sorted alphabetically.",
         list);
-    Option  list__pathOpt = createStringOption("p",
-                                              "path",
-                                              "Path to the .env file",
-                                              "./.env.example");
-    Option *list__opts[]  = {&list__pathOpt, &ignoreOpt, &keyOpt, &truncateOpt};
-    listCmd.opts          = list__opts;
-    listCmd.optsCount     = ARRAY_LEN(list__opts);
+    Option list__targetOpt =
+        createStringOption("t", "target", "Path to the .env file", "./.env");
+    Option *list__opts[] = {&list__targetOpt,
+                            &ignoreOpt,
+                            &keyOpt,
+                            &truncateOpt};
+    listCmd.opts         = list__opts;
+    listCmd.optsCount    = ARRAY_LEN(list__opts);
 
     //=== Env Check ==========================================================//
     Command *commands[] = {&compareCmd, &listCmd};
@@ -580,78 +582,8 @@ void printTitle(cstring fileName) {
     printf("%s%s%s\n", titleColor, underline, NO_COLOUR);
 }
 
-//=== List ===================================================================//
-int list(Command *self) {
-    string          path       = getStringOpt(self, "path");
-    string          ignore     = getStringOpt(self, "ignore");
-    string          key        = getStringOpt(self, "key");
-    String          strIgnore  = stringFrom(ignore);
-    String          strKey     = stringFrom(key);
-    string          truncate   = getStringOpt(self, "truncate");
-    int             truncateTo = truncate ? atoi(truncate) : 0;
-    HashTableConfig config =
-        hashTableCreateConfig(true, false, false, free, freeEnvVar, NULL);
-
-    usize  ignoreSize = ignore ? stringCharOccurrences(strIgnore, ',') + 1 : 0;
-    String ignoreArr[ignoreSize + 1];
-    stringSplitByDelim(strIgnore, ',', ignoreArr, ignoreSize);
-    usize  focusSize = key ? stringCharOccurrences(strKey, ',') + 1 : 0;
-    String focusArr[focusSize];
-    stringSplitByDelim(strKey, ',', focusArr, focusSize);
-
-    HashTableBucket *buckets[50];
-    hashTableInitBuckets(buckets, 50);
-    HashTable table = hashTableCreate(50, buckets, &config);
-
-    if (readEnvFile(&table,
-                    path,
-                    ignoreArr,
-                    ignoreSize,
-                    focusArr,
-                    focusSize,
-                    false) > 0) {
-        freeStrings(ignoreArr, ignoreSize);
-        freeStrings(focusArr, focusSize);
-        hashTableDestroy(&table);
-        return EXIT_FAILURE;
-    }
-
-    freeStrings(ignoreArr, ignoreSize);
-    freeStrings(focusArr, focusSize);
-
-    usize   vars = table.size;
-    cstring keys[vars];
-    hashTableKeysBuffer(&table, keys, vars);
-    sortEnvVarsArray(keys, vars);
-
-    printTitle(path);
-
-    usize firstColumnWidth  = 7;
-    usize secondColumnWidth = 7;
-
-    for (usize i = 0; i < vars; ++i) {
-        EnvVar *var       = hashTableGet(&table, keys[i]);
-        firstColumnWidth  = max(firstColumnWidth, var->nameLength);
-        secondColumnWidth = max(secondColumnWidth, var->valueLength);
-    }
-
-    if (truncateTo > 0) {
-        firstColumnWidth  = min(firstColumnWidth, truncateTo);
-        secondColumnWidth = min(secondColumnWidth, truncateTo);
-    }
-
-    for (usize i = 0; i < vars; ++i) {
-        EnvVar *var = hashTableGet(&table, keys[i]);
-        printEnvVar(var, firstColumnWidth, secondColumnWidth, 0, false);
-    }
-
-    hashTableDestroy(&table);
-
-    return EXIT_SUCCESS;
-}
-
-//=== Compare ================================================================//
-int compare(Command *self) {
+//=== Command impl ===========================================================//
+int handleCommand(Command *self) {
     string          target     = getStringOpt(self, "target");
     string          source     = getStringOpt(self, "source");
     string          ignore     = getStringOpt(self, "ignore");
@@ -664,6 +596,7 @@ int compare(Command *self) {
     boolean         undefined  = getBoolOpt(self, "undefined");
     boolean         divergent  = getBoolOpt(self, "divergent");
     boolean         selective  = missing || undefined || divergent;
+    boolean         comparing  = source != NULL;
     HashTableConfig config =
         hashTableCreateConfig(true, false, false, free, freeEnvVar, NULL);
 
@@ -678,13 +611,13 @@ int compare(Command *self) {
     hashTableInitBuckets(buckets, 50);
     HashTable table = hashTableCreate(50, buckets, &config);
 
-    if (readEnvFile(&table,
-                    source,
-                    ignoreArr,
-                    ignoreSize,
-                    focusArr,
-                    focusSize,
-                    false) > 0) {
+    if (comparing && readEnvFile(&table,
+                                 source,
+                                 ignoreArr,
+                                 ignoreSize,
+                                 focusArr,
+                                 focusSize,
+                                 false) > 0) {
         freeStrings(ignoreArr, ignoreSize);
         freeStrings(focusArr, focusSize);
         hashTableDestroy(&table);
@@ -697,7 +630,7 @@ int compare(Command *self) {
                     ignoreSize,
                     focusArr,
                     focusSize,
-                    true) > 0) {
+                    comparing) > 0) {
         freeStrings(ignoreArr, ignoreSize);
         freeStrings(focusArr, focusSize);
         hashTableDestroy(&table);
@@ -712,9 +645,13 @@ int compare(Command *self) {
     hashTableKeysBuffer(&table, keys, vars);
     sortEnvVarsArray(keys, vars);
 
-    char title[FILENAME_MAX];
-    sprintf(title, "Comparing '%s' to '%s'", source, target);
-    printTitle(title);
+    if (comparing) {
+        char title[FILENAME_MAX];
+        sprintf(title, "Comparing '%s' to '%s'", source, target);
+        printTitle(title);
+    } else {
+        printTitle(target);
+    }
 
     usize firstColumnWidth  = 7;
     usize secondColumnWidth = 7;
@@ -754,11 +691,21 @@ int compare(Command *self) {
                         firstColumnWidth,
                         secondColumnWidth,
                         thirdColumnWidth,
-                        true);
+                        comparing);
         }
     }
 
     hashTableDestroy(&table);
 
     return EXIT_SUCCESS;
+}
+
+//=== List ===================================================================//
+int list(Command *self) {
+    return handleCommand(self);
+}
+
+//=== Compare ================================================================//
+int compare(Command *self) {
+    return handleCommand(self);
 }
