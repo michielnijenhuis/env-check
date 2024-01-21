@@ -21,9 +21,9 @@
 
 //=== Defines ================================================================//
 #define ENVC_EXECUTABLE "envc"
-#define ENVC_NAME "Env Check"
-#define ENVC_VERSION "1.0.1"
-#define MALLOC_ERR printError("Memory allocation failed.")
+#define ENVC_NAME       "Env Check"
+#define ENVC_VERSION    "1.0.1"
+#define MALLOC_ERR      printError("Memory allocation failed.")
 
 //=== Typedefs ===============================================================//
 typedef enum EnvVarStatus {
@@ -62,7 +62,9 @@ int     readEnvFile(HashTable *table,
                     String    *focus,
                     usize      focusSize,
                     boolean    comparing);
-usize   findMaxWidthInArray(EnvVar **variables, usize variablesSize, boolean name);
+usize   findMaxWidthInArray(EnvVar **variables,
+                            usize    variablesSize,
+                            boolean  name);
 void    trimString(string input);
 boolean isNumeric(cstring str);
 void    printEnvVar(const EnvVar *var,
@@ -79,33 +81,65 @@ int     compare(Command *self);
 //=== Main ===================================================================//
 int main(int argc, string argv[]) {
     //=== Shared options =====================================================//
-    Option ignoreOpt =
-        createStringOption("i", "ignore", "Comma seperated list of variable name patterns to ignore", NULL);
-    Option keyOpt = createStringOption("k", "key", "Comma seperated list of variable name patterns to focus on", NULL);
-    Option truncateOpt = createStringOption("T", "truncate", "The amount of chars to truncate keys or values to", "40");
+    Option ignoreOpt = createStringOption(
+        "i",
+        "ignore",
+        "Comma seperated list of variable name patterns to ignore",
+        NULL);
+    Option keyOpt = createStringOption(
+        "k",
+        "key",
+        "Comma seperated list of variable name patterns to focus on",
+        NULL);
+    Option truncateOpt =
+        createStringOption("T",
+                           "truncate",
+                           "The amount of chars to truncate keys or values to",
+                           "40");
 
     //=== Compare ============================================================//
-    Command compareCmd     = createCommand("cmp", "Compares two env files files.", compare);
-    Option  cmp__targetOpt = createStringOption("t", "target", "Path to the .env file to compare with", "./.env");
-    Option  cmp__sourceOpt = createStringOption("s", "source", "Path to the .env file to compare to", "./.env.example");
-    Option  cmp__missingOpt = createBoolOption("m", "missing", "Show missing and empty variables");
-    Option  cmp__undefinedOpt =
-        createBoolOption("u", "undefined", "Show variables in the target that aren't in the source file");
-    Option  cmp__divergentOpt = createBoolOption("d", "divergent", "Show variables with diverging values");
-    Option *cmd__opts[]       = {&cmp__targetOpt,
-                                 &cmp__sourceOpt,
-                                 &ignoreOpt,
-                                 &keyOpt,
-                                 &truncateOpt,
-                                 &cmp__missingOpt,
-                                 &cmp__undefinedOpt,
-                                 &cmp__divergentOpt};
-    compareCmd.opts           = cmd__opts;
-    compareCmd.optsCount      = ARRAY_LEN(cmd__opts);
+    Command compareCmd =
+        createCommand("cmp", "Compares two env files files.", compare);
+    Option cmp__targetOpt =
+        createStringOption("t",
+                           "target",
+                           "Path to the .env file to compare with",
+                           "./.env");
+    Option cmp__sourceOpt =
+        createStringOption("s",
+                           "source",
+                           "Path to the .env file to compare to",
+                           "./.env.example");
+    Option cmp__missingOpt =
+        createBoolOption("m", "missing", "Show missing and empty variables");
+    Option cmp__undefinedOpt = createBoolOption(
+        "u",
+        "undefined",
+        "Show variables in the target that aren't in the source file");
+    Option cmp__divergentOpt =
+        createBoolOption("d",
+                         "divergent",
+                         "Show variables with diverging values");
+    Option *cmd__opts[]  = {&cmp__targetOpt,
+                            &cmp__sourceOpt,
+                            &ignoreOpt,
+                            &keyOpt,
+                            &truncateOpt,
+                            &cmp__missingOpt,
+                            &cmp__undefinedOpt,
+                            &cmp__divergentOpt};
+    compareCmd.opts      = cmd__opts;
+    compareCmd.optsCount = ARRAY_LEN(cmd__opts);
 
     //=== List ===============================================================//
-    Command listCmd = createCommand("list", "Lists all variables in the target env file, sorted alphabetically.", list);
-    Option  list__pathOpt = createStringOption("p", "path", "Path to the .env file", "./.env.example");
+    Command listCmd = createCommand(
+        "list",
+        "Lists all variables in the target env file, sorted alphabetically.",
+        list);
+    Option  list__pathOpt = createStringOption("p",
+                                              "path",
+                                              "Path to the .env file",
+                                              "./.env.example");
     Option *list__opts[]  = {&list__pathOpt, &ignoreOpt, &keyOpt, &truncateOpt};
     listCmd.opts          = list__opts;
     listCmd.optsCount     = ARRAY_LEN(list__opts);
@@ -127,6 +161,7 @@ int main(int argc, string argv[]) {
 void freeEnvVar(void *var) {
     free(((EnvVar *) var)->name);
     free(((EnvVar *) var)->value);
+    free(((EnvVar *) var)->compareValue);
     free(var);
 }
 
@@ -158,12 +193,14 @@ void trimString(string input) {
 
     // Trim line breaks at the end
     usize length = strlen(input);
-    while (length > 0 && (input[length - 1] == '\n' || input[length - 1] == '\r')) {
+    while (length > 0 &&
+           (input[length - 1] == '\n' || input[length - 1] == '\r')) {
         input[--length] = '\0';
     }
 
     // Remove quotes if present
-    if ((input[0] == '\'' && input[length - 1] == '\'') || (input[0] == '"' && input[length - 1] == '"')) {
+    if ((input[0] == '\'' && input[length - 1] == '\'') ||
+        (input[0] == '"' && input[length - 1] == '"')) {
         memmove(input, input + 1, length - 2);
         input[length - 2] = '\0';
     }
@@ -187,7 +224,9 @@ void sortEnvVarsArray(cstring *keys, usize size) {
     }
 }
 
-usize findMaxWidthInArray(EnvVar **variables, usize variablesSize, boolean name) {
+usize findMaxWidthInArray(EnvVar **variables,
+                          usize    variablesSize,
+                          boolean  name) {
     usize maxLength = 0;
     for (usize i = 0; i < variablesSize; ++i) {
         EnvVar *var = variables[i];
@@ -213,17 +252,23 @@ void printEnvVar(const EnvVar *var,
     string  numColor      = EMERALD;
     string  strColor      = NO_COLOUR;
     boolean valueAIsEmpty = cstringIsEmpty(var->value);
-    boolean valueAIsBool =
-        cstringEqualsCaseInsensitive(var->value, "true") || cstringEqualsCaseInsensitive(var->value, "false");
+    boolean valueAIsBool  = cstringEqualsCaseInsensitive(var->value, "true") ||
+                           cstringEqualsCaseInsensitive(var->value, "false");
     boolean valueAIsNumeric = !valueAIsBool && isNumeric(var->value);
-    string  valueAColor     = valueAIsBool ? boolColor : valueAIsNumeric ? numColor : strColor;
+    string  valueAColor     = valueAIsBool      ? boolColor
+                              : valueAIsNumeric ? numColor
+                                                : strColor;
     usize   valueASize      = max(secondColumnWidth + 1, 8);
-    boolean valueBIsEmpty   = comparing ? cstringIsEmpty(var->compareValue) : true;
-    boolean valueBIsBool    = comparing ? cstringEqualsCaseInsensitive(var->compareValue, "true") ||
-                                           cstringEqualsCaseInsensitive(var->compareValue, "false")
-                                        : false;
+    boolean valueBIsEmpty =
+        comparing ? cstringIsEmpty(var->compareValue) : true;
+    boolean valueBIsBool =
+        comparing ? cstringEqualsCaseInsensitive(var->compareValue, "true") ||
+                        cstringEqualsCaseInsensitive(var->compareValue, "false")
+                  : false;
     boolean valueBIsNumeric = !valueBIsBool && isNumeric(var->compareValue);
-    string  valueBColor     = valueBIsBool ? boolColor : valueBIsNumeric ? numColor : strColor;
+    string  valueBColor     = valueBIsBool      ? boolColor
+                              : valueBIsNumeric ? numColor
+                                                : strColor;
     usize   valueBSize      = comparing ? max(thirdColumnWidth + 1, 8) : 0;
     char    __valueA[valueASize];
     char    __valueB[valueBSize];
@@ -285,10 +330,25 @@ void printEnvVar(const EnvVar *var,
     if (comparing) {
         printf("%s%s%s ", statusColor, status, NO_COLOUR);
     }
-    printf("%s%-*.*s%s", keyColor, firstColumnWidth + 4, firstColumnWidth, var->name, NO_COLOUR);     // column 1
-    printf("%s%-*.*s%s", valueAColor, secondColumnWidth + 3, secondColumnWidth, __valueA, NO_COLOUR); // column 2
+    printf("%s%-*.*s%s",
+           keyColor,
+           firstColumnWidth + 4,
+           firstColumnWidth,
+           var->name,
+           NO_COLOUR); // column 1
+    printf("%s%-*.*s%s",
+           valueAColor,
+           secondColumnWidth + 3,
+           secondColumnWidth,
+           __valueA,
+           NO_COLOUR); // column 2
     if (comparing) {
-        printf("%s%-*.*s%s", valueBColor, thirdColumnWidth, thirdColumnWidth, __valueB, NO_COLOUR); // column 3
+        printf("%s%-*.*s%s",
+               valueBColor,
+               thirdColumnWidth,
+               thirdColumnWidth,
+               __valueB,
+               NO_COLOUR); // column 3
     }
     printf("\n"); // line break
 }
@@ -354,7 +414,8 @@ void createEnvVarFromLine(HashTable *table,
     strcpy(trimmed, delimPos + 1);
     trimString(trimmed);
     trimmed[valueLength] = '\0';
-    if (!cstringEqualsCaseInsensitive(trimmed, "null") && !cstringEqualsCaseInsensitive(trimmed, "(null)")) {
+    if (!cstringEqualsCaseInsensitive(trimmed, "null") &&
+        !cstringEqualsCaseInsensitive(trimmed, "(null)")) {
         strcpy(value, trimmed);
     } else {
         value[0]    = '\0';
@@ -449,7 +510,8 @@ int readEnvFile(HashTable *table,
     }
 
     if (ignoreSize > 0 && focusSize > 0) {
-        printError("Cannot read env file while taking both ignore and focus arguments.");
+        printError(
+            "Cannot read env file while taking both ignore and focus arguments.");
         return EXIT_FAILURE;
     }
 
@@ -464,7 +526,13 @@ int readEnvFile(HashTable *table,
     }
 
     while ((read = getline(&buffer, &len, file)) != -1) {
-        createEnvVarFromLine(table, buffer, ignore, ignoreSize, focus, focusSize, comparing);
+        createEnvVarFromLine(table,
+                             buffer,
+                             ignore,
+                             ignoreSize,
+                             focus,
+                             focusSize,
+                             comparing);
     }
 
     fclose(file);
@@ -477,12 +545,15 @@ boolean matchPattern(cstring str, cstring pattern) {
         return true;
     }
 
-    // If pattern has '*', try matching with and without consuming a character in the string
+    // If pattern has '*', try matching with and without consuming a character
+    // in the string
     if (*pattern == '*') {
-        return matchPattern(str, pattern + 1) || (*str != '\0' && matchPattern(str + 1, pattern));
+        return matchPattern(str, pattern + 1) ||
+               (*str != '\0' && matchPattern(str + 1, pattern));
     }
 
-    // If pattern has '?' or characters match, move to the next character in both strings
+    // If pattern has '?' or characters match, move to the next character in
+    // both strings
     if (*pattern == '?' || (*str != '\0' && *str == *pattern)) {
         return matchPattern(str + 1, pattern + 1);
     }
@@ -519,10 +590,11 @@ int list(Command *self) {
     String          strKey     = stringFrom(key);
     string          truncate   = getStringOpt(self, "truncate");
     int             truncateTo = truncate ? atoi(truncate) : 0;
-    HashTableConfig config     = hashTableCreateConfig(true, false, false, free, freeEnvVar, NULL);
+    HashTableConfig config =
+        hashTableCreateConfig(true, false, false, free, freeEnvVar, NULL);
 
-    usize           ignoreSize = ignore ? stringCharOccurrences(strIgnore, ',') + 1 : 0;
-    String          ignoreArr[ignoreSize + 1];
+    usize  ignoreSize = ignore ? stringCharOccurrences(strIgnore, ',') + 1 : 0;
+    String ignoreArr[ignoreSize + 1];
     stringSplitByDelim(strIgnore, ',', ignoreArr, ignoreSize);
     usize  focusSize = key ? stringCharOccurrences(strKey, ',') + 1 : 0;
     String focusArr[focusSize];
@@ -532,7 +604,13 @@ int list(Command *self) {
     hashTableInitBuckets(buckets, 50);
     HashTable table = hashTableCreate(50, buckets, &config);
 
-    if (readEnvFile(&table, path, ignoreArr, ignoreSize, focusArr, focusSize, false) > 0) {
+    if (readEnvFile(&table,
+                    path,
+                    ignoreArr,
+                    ignoreSize,
+                    focusArr,
+                    focusSize,
+                    false) > 0) {
         freeStrings(ignoreArr, ignoreSize);
         freeStrings(focusArr, focusSize);
         hashTableDestroy(&table);
@@ -587,10 +665,11 @@ int compare(Command *self) {
     boolean         undefined  = getBoolOpt(self, "undefined");
     boolean         divergent  = getBoolOpt(self, "divergent");
     boolean         selective  = missing || undefined || divergent;
-    HashTableConfig config     = hashTableCreateConfig(true, false, false, free, freeEnvVar, NULL);
+    HashTableConfig config =
+        hashTableCreateConfig(true, false, false, free, freeEnvVar, NULL);
 
-    usize           ignoreSize = ignore ? stringCharOccurrences(strIgnore, ',') + 1 : 0;
-    String          ignoreArr[ignoreSize];
+    usize  ignoreSize = ignore ? stringCharOccurrences(strIgnore, ',') + 1 : 0;
+    String ignoreArr[ignoreSize];
     stringSplitByDelim(strIgnore, ',', ignoreArr, ignoreSize);
     usize  focusSize = key ? stringCharOccurrences(strKey, ',') + 1 : 0;
     String focusArr[focusSize];
@@ -600,14 +679,26 @@ int compare(Command *self) {
     hashTableInitBuckets(buckets, 50);
     HashTable table = hashTableCreate(50, buckets, &config);
 
-    if (readEnvFile(&table, source, ignoreArr, ignoreSize, focusArr, focusSize, false) > 0) {
+    if (readEnvFile(&table,
+                    source,
+                    ignoreArr,
+                    ignoreSize,
+                    focusArr,
+                    focusSize,
+                    false) > 0) {
         freeStrings(ignoreArr, ignoreSize);
         freeStrings(focusArr, focusSize);
         hashTableDestroy(&table);
         return EXIT_FAILURE;
     }
 
-    if (readEnvFile(&table, target, ignoreArr, ignoreSize, focusArr, focusSize, true) > 0) {
+    if (readEnvFile(&table,
+                    target,
+                    ignoreArr,
+                    ignoreSize,
+                    focusArr,
+                    focusSize,
+                    true) > 0) {
         freeStrings(ignoreArr, ignoreSize);
         freeStrings(focusArr, focusSize);
         hashTableDestroy(&table);
@@ -632,8 +723,10 @@ int compare(Command *self) {
 
     for (usize i = 0; i < vars; ++i) {
         EnvVar *var         = hashTableGet(&table, keys[i]);
-        boolean shouldPrint = !selective || (var->status == MISSING && missing) ||
-                              (var->status == UNDEFINED && undefined) || (var->status == DIVERGENT && divergent);
+        boolean shouldPrint = !selective ||
+                              (var->status == MISSING && missing) ||
+                              (var->status == UNDEFINED && undefined) ||
+                              (var->status == DIVERGENT && divergent);
 
         if (!shouldPrint) {
             continue;
@@ -652,11 +745,17 @@ int compare(Command *self) {
 
     for (usize i = 0; i < vars; ++i) {
         EnvVar *var         = hashTableGet(&table, keys[i]);
-        boolean shouldPrint = !selective || (var->status == MISSING && missing) ||
-                              (var->status == UNDEFINED && undefined) || (var->status == DIVERGENT && divergent);
+        boolean shouldPrint = !selective ||
+                              (var->status == MISSING && missing) ||
+                              (var->status == UNDEFINED && undefined) ||
+                              (var->status == DIVERGENT && divergent);
 
         if (shouldPrint) {
-            printEnvVar(var, firstColumnWidth, secondColumnWidth, thirdColumnWidth, true);
+            printEnvVar(var,
+                        firstColumnWidth,
+                        secondColumnWidth,
+                        thirdColumnWidth,
+                        true);
         }
     }
 

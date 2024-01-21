@@ -22,7 +22,7 @@
     BreakArrays: true,
     BreakBeforeTernaryOperators: true,
     BreakStringLiterals: false,
-    ColumnLimit: 120,
+    ColumnLimit: 80,
     FixNamespaceComments: false,
     IncludeBlocks: Regroup,
     IndentCaseLabels: true,
