@@ -16,14 +16,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-//=== TODOS ==================================================================//
-// implement multiple ignore/focus strings (seperate by ,)
-
 //=== Defines ================================================================//
 #define ENVC_EXECUTABLE "envc"
 #define ENVC_NAME       "Env Check"
-#define ENVC_VERSION    "1.0.1"
-#define MALLOC_ERR      printError("Memory allocation failed.")
+#ifndef ENVC_VERSION
+# define ENVC_VERSION NULL
+#endif // ENVC_VERSION
+#define MALLOC_ERR printError("Memory allocation failed.")
 
 //=== Typedefs ===============================================================//
 typedef enum EnvVarStatus {
