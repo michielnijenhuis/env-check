@@ -1,4 +1,4 @@
-if [ ! i-d "src/lib" ]; then
+if [ ! -d "src/lib" ]; then
     mkdir -p "src/lib"
 fi
 
