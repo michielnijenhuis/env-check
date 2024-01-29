@@ -12,4 +12,17 @@ function symlink_lib() {
     done
 }
 
-symlink_lib "array-list" "cli" "cstring" "hash-table" "types" "utils"
+symlink_lib "argument" \
+    "array-list" \
+    "cli" \
+    "colors" \
+    "command" \
+    "cstring" \
+    "hash-table" \
+    "input" \
+    "math" \
+    "option" \
+    "output" \
+    "program" \
+    "types" \
+    "utils"
