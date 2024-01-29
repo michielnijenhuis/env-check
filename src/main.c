@@ -85,45 +85,48 @@ int     compare(Command *self);
 //=== Main ===================================================================//
 int main(int argc, string argv[]) {
     //=== Shared options =====================================================//
-    Option ignoreOpt = createStringOption(
-        "i",
+    Option ignoreOpt = optionCreateStringOpt(
         "ignore",
+        "i",
         "Comma seperated list of variable name patterns to ignore",
-        NULL);
-    Option keyOpt = createStringOption(
-        "k",
+        NULL,
+        true);
+    Option keyOpt = optionCreateStringOpt(
         "key",
+        "k",
         "Comma seperated list of variable name patterns to focus on",
-        NULL);
-    Option truncateOpt =
-        createStringOption("T",
-                           "truncate",
-                           "The amount of chars to truncate keys or values to",
-                           "40");
+        NULL,
+        true);
+    Option truncateOpt = optionCreateStringOpt(
+        "truncate",
+        "T",
+        "The amount of chars to truncate keys or values to",
+        "40",
+        false);
 
     //=== Compare ============================================================//
     Command compareCmd =
-        createCommand("cmp", "Compares two env files files.", compare);
+        commandCreate("cmp", "Compares two env files files.", compare);
     Option cmp__targetOpt =
-        createStringOption("t",
-                           "target",
-                           "Path to the .env file to compare with",
-                           "./.env");
+        optionCreateStringOpt("target",
+                              "t",
+                              "Path to the .env file to compare with",
+                              "./.env",
+                              false);
     Option cmp__sourceOpt =
-        createStringOption("s",
-                           "source",
-                           "Path to the .env file to compare to",
-                           "./.env.example");
+        optionCreateStringOpt("source",
+                              "s",
+                              "Path to the .env file to compare to",
+                              "./.env.example",
+                              false);
     Option cmp__missingOpt =
-        createBoolOption("m", "missing", "Show missing and empty variables");
-    Option cmp__undefinedOpt = createBoolOption(
-        "u",
+        optionCreate("missing", "m", "Show missing and empty variables");
+    Option cmp__undefinedOpt = optionCreate(
         "undefined",
+        "u",
         "Show variables in the target that aren't in the source file");
     Option cmp__divergentOpt =
-        createBoolOption("d",
-                         "divergent",
-                         "Show variables with diverging values");
+        optionCreate("divergent", "d", "Show variables with diverging values");
     Option *cmd__opts[]  = {&cmp__targetOpt,
                             &cmp__sourceOpt,
                             &ignoreOpt,
@@ -136,18 +139,21 @@ int main(int argc, string argv[]) {
     compareCmd.optsCount = ARRAY_LEN(cmd__opts);
 
     //=== List ===============================================================//
-    Command listCmd = createCommand(
+    Command listCmd = commandCreate(
         "list",
         "Lists all variables in the target env file, sorted alphabetically.",
         list);
-    Option list__targetOpt =
-        createStringOption("t", "target", "Path to the .env file", "./.env");
-    Option *list__opts[] = {&list__targetOpt,
-                            &ignoreOpt,
-                            &keyOpt,
-                            &truncateOpt};
-    listCmd.opts         = list__opts;
-    listCmd.optsCount    = ARRAY_LEN(list__opts);
+    Option  list__targetOpt = optionCreateStringOpt("target",
+                                                   "t",
+                                                   "Path to the .env file",
+                                                   "./.env",
+                                                   false);
+    Option *list__opts[]    = {&list__targetOpt,
+                               &ignoreOpt,
+                               &keyOpt,
+                               &truncateOpt};
+    listCmd.opts            = list__opts;
+    listCmd.optsCount       = ARRAY_LEN(list__opts);
 
     //=== Env Check ==========================================================//
     Command *commands[] = {&compareCmd, &listCmd};

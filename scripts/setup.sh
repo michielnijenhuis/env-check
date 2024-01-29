@@ -1,11 +1,13 @@
+#!/bin/bash
+
 if [ ! -d "src/lib" ]; then
     mkdir -p "src/lib"
 fi
 
-cd "src/lib"
+cd "src/lib" || exit 1
 
 function symlink_lib() {
-    for lib in $@; do
+    for lib in "$@"; do
         ln -sf "$HOME/dotfiles/lib/$lib.h" "$(pwd)";
     done
 }

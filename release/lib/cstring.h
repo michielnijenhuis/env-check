@@ -93,7 +93,7 @@ CSTRINGDEF String stringFrom(cstring str) {
 }
 
 CSTRINGDEF String *stringMalloc(const String str) {
-    String *result = malloc(sizeof(*result));
+    String *result = (String *) malloc(sizeof(*result));
     cstring data   = strdup(str.data);
     result->data   = data;
     result->length = str.length;
@@ -498,7 +498,7 @@ CSTRINGDEF int stringSplitByDelim(const String str, char delim, String *buffer, 
 
         if (fragmentIndex + 1 < bufferSize) {
             usize  len  = end - start;
-            string data = malloc(sizeof(char) * (len + 1));
+            string data = (string) malloc(sizeof(char) * (len + 1));
             if (data == NULL) {
                 return -3;
             }
@@ -508,7 +508,7 @@ CSTRINGDEF int stringSplitByDelim(const String str, char delim, String *buffer, 
             buffer[fragmentIndex].data   = data;
         } else {
             usize  len  = str.length - start;
-            string data = malloc(sizeof(char) * (len + 1));
+            string data = (string) malloc(sizeof(char) * (len + 1));
             if (data == NULL) {
                 return -3;
             }
@@ -536,7 +536,6 @@ CSTRINGDEF int stringSplitByString(const String str, const String delim, String 
         return -1;
     }
 
-    usize delimOccurrences = 0;
     usize start            = 0;
     usize fragmentIndex    = 0;
 
@@ -548,7 +547,7 @@ CSTRINGDEF int stringSplitByString(const String str, const String delim, String 
 
         if (fragmentIndex + 1 < bufferSize) {
             usize  len  = end - start;
-            string data = malloc(sizeof(char) * (len + 1));
+            string data = (string) malloc(sizeof(char) * (len + 1));
             if (data == NULL) {
                 return -3;
             }
@@ -558,7 +557,7 @@ CSTRINGDEF int stringSplitByString(const String str, const String delim, String 
             buffer[fragmentIndex].data   = data;
         } else {
             usize  len  = str.length - start;
-            string data = malloc(sizeof(char) * (len + 1));
+            string data = (string) malloc(sizeof(char) * (len + 1));
             if (data == NULL) {
                 return -3;
             }
@@ -572,7 +571,6 @@ CSTRINGDEF int stringSplitByString(const String str, const String delim, String 
 
         start = end + delim.length;
         ++fragmentIndex;
-        ++delimOccurrences;
     }
 
     for (usize i = fragmentIndex; i < bufferSize; ++i) {
