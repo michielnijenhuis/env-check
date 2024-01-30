@@ -14,15 +14,7 @@
 
 #include <assert.h>
 
-// TODO: add usage cmd in case of errors (just a more detailed usage, not the list of opts and args etc)
-// TODO: add more DX fns
-// TODO: add autocompletion (see readline/readline.h and readline/history.h
-// TODO: add optional ascii art
-// TODO: add command name aliases
 // TODO: add option to register more global opts
-// TODO: implement more assertions
-// TODO: handle negatable options (find, print)
-// TODO: --ansi|--no-ansi option
 // TODO: add interactivity fns (open question, yes/no question, multiple choice)
 // TODO: -n, --no-interaction option
 // TODO: --profile option
@@ -33,9 +25,14 @@ int        runCommand(Command *cmd, int argc, string argv[]);
 
 static int usage(Program *program, boolean versionOnly);
 static int usageCmd(Command *cmd, Option **defaultOpts, usize defaultOptsCount);
+static int usageStringCmd(Command *cmd);
 static int
 doRunCommand(Command *cmd, int argc, string argv[], uint offset, Option **defaultOpts, usize defaultOptsCount);
 static void cleanup(Command *cmd);
+static boolean handleAnsiOpt(Option **opts, usize optsCount);
+static boolean handleVerbosityOpt(Option **opts, usize optsCount);
+static boolean handleQuietOpt(Option **opts, usize optsCount);
+static uint handleDefaultOpts(Option **opts, usize optsCount);
 
 #endif // CLI_H
 
@@ -48,34 +45,36 @@ static void cleanup(Command *cmd);
 int runApplication(Program *program, int argc, string argv[]) {
     assert(program != NULL);
 
-    // add global opts and arg to program
+    // create global opts that are added to program and running command
     Option helpOpt      = optionCreate("help", "h", "Display help.");
     Option quietOpt     = optionCreate("quiet", "q", "Do not output any message.");
     Option versionOpt   = optionCreate("version", "V", "Show the current version of the program.");
+    Option ansiOpt      = optionCreateBoolOpt("ansi", NULL, "Force (or disable) ANSI output.", true, true);
     Option verbosityOpt = optionCreate("verbose", "v", "Set the log level for the program.");
     optionSetFlag(&verbosityOpt, OPTION_LEVELS);
 
-    usize optsCount = 3;
+    usize optsCount = 4;
     if (program->version) {
         ++optsCount;
     }
 
+    // configure default opts array
     Option *defaultOpts[optsCount];
     defaultOpts[0] = &helpOpt;
     defaultOpts[1] = &quietOpt;
+    defaultOpts[2] = &ansiOpt;
     if (program->version) {
-        defaultOpts[2] = &versionOpt;
+        defaultOpts[optsCount - 2] = &versionOpt;
     }
     defaultOpts[optsCount - 1] = &verbosityOpt;
 
-    Argument cmdArg            = argumentCreate("cmd", "The command to call.");
-    argumentMakeRequired(&cmdArg, NULL);
-    Argument *args[]   = {&cmdArg};
+    // create command arg to catch the command the user wants to run
+    Argument  cmdArg = argumentCreate("cmd", "The command to call.");
+    Argument *args[] = {&cmdArg};
 
-    program->opts      = defaultOpts;
-    program->optsCount = ARRAY_LEN(defaultOpts);
-    program->args      = args;
-    program->argsCount = ARRAY_LEN(args);
+    // bind default opts and args to program
+    programSetOpts(program, defaultOpts, ARRAY_LEN(defaultOpts));
+    programSetArgs(program, args, ARRAY_LEN(args));
 
     // program invoked without any args, print usage
     if (argc <= 1) {
@@ -89,53 +88,35 @@ int runApplication(Program *program, int argc, string argv[]) {
         parseArgs(program->opts, program->optsCount, program->args, program->argsCount, argc, argv, argvOffset);
 
     // handle global opts
+    argvOffset += handleDefaultOpts(program->opts, program->optsCount);
+
+    // usage (help or version)
     boolean wantsHelp   = optionGetBool(program->opts, program->optsCount, "help");
     boolean showVersion = optionGetBool(program->opts, program->optsCount, "version");
-    boolean beQuiet     = optionGetBool(program->opts, program->optsCount, "quiet");
-    uint    verbosity   = optionGetLevel(program->opts, program->optsCount, "verbose");
-
     if ((argc == 2 && wantsHelp) || showVersion) {
         return usage(program, showVersion);
     }
 
+    // exit if input error
     if (error) {
-        printError(error);
+        printErrorLarge(error);
         free(error);
         return EXIT_FAILURE;
     }
 
-    if (verbosity > 0) {
-        ++argvOffset;
-        switch (verbosity + 1) {
-            case LOG_LEVEL_ERROR:
-                setLogLevel(LOG_LEVEL_ERROR);
-                break;
-            case LOG_LEVEL_WARNING:
-                setLogLevel(LOG_LEVEL_WARNING);
-                break;
-            case LOG_LEVEL_INFO:
-                setLogLevel(LOG_LEVEL_INFO);
-                break;
-            case LOG_LEVEL_DEBUG:
-                setLogLevel(LOG_LEVEL_DEBUG);
-                break;
-            case LOG_LEVEL_QUIET:
-            default:
-                break;
-        }
-    }
+    // get provided command
+    string cmd = argumentGet(program->args, program->argsCount, "cmd");
 
-    if (beQuiet) {
-        setLogLevel(LOG_LEVEL_QUIET);
-        ++argvOffset;
+    // if no command is given, print usage
+    if (!cmd) {
+        return usage(program, false);
     }
 
     // find and run command
-    string   cmd     = argumentGet(program->args, program->argsCount, "cmd");
     Command *command = commandFind(program->commands, program->commandsCount, cmd);
 
     if (!command) {
-        printError("Unknown command: %s", cmd);
+        printErrorLarge("Unknown command: %s", cmd);
         return 1;
     } else {
         ++argvOffset;
@@ -149,9 +130,13 @@ int runCommand(Command *cmd, int argc, string argv[]) {
 }
 
 static int usage(Program *program, boolean versionOnly) {
-    printf(GREEN "%s" NO_COLOUR, program->name);
+    if (program->art) {
+        printf("%s\n", program->art);
+    }
+
+    pcolorf(GREEN, "%s", program->name);
     if (program->version != NULL) {
-        printf(" version %s%s%s", YELLOW, program->version, NO_COLOUR);
+        printf(" version %s%s%s", COLOR(YELLOW), program->version, NO_COLOUR);
     }
     printf("\n");
 
@@ -160,29 +145,29 @@ static int usage(Program *program, boolean versionOnly) {
     }
 
     printf("\n");
-    printf(YELLOW "Usage:\n" NO_COLOUR);
+    pcolor(YELLOW, "Usage:\n");
     printf("  command [options] [arguments]\n");
 
     uint width = max(optionGetPrintWidth(program->opts, program->optsCount),
                      commandGetPrintWidth(program->commands, program->commandsCount));
 
     printf("\n");
-    printf(YELLOW "Options:\n" NO_COLOUR);
+    pcolor(YELLOW, "Options:\n");
     optionPrintAll(program->opts, program->optsCount, width);
 
     printf("\n");
-    printf(YELLOW "Available commands:\n" NO_COLOUR);
+    pcolor(YELLOW, "Available commands:\n");
     commandPrintAll(program->commands, program->commandsCount, width);
 
     return 1;
 }
 
 static int usageCmd(Command *cmd, Option **defaultOpts, usize defaultOptsCount) {
-    printf(YELLOW "Description:\n" NO_COLOUR);
+    pcolor(YELLOW, "Description:\n");
     printf("  %s\n", cmd->description);
 
     printf("\n");
-    printf(YELLOW "Usage:\n" NO_COLOUR);
+    pcolor(YELLOW, "Usage:\n");
     printf("  ");
     printf("%s [options]", cmd->name);
 
@@ -197,8 +182,18 @@ static int usageCmd(Command *cmd, Option **defaultOpts, usize defaultOptsCount) 
 
         for (usize i = 0; i < cmd->argsCount; ++i) {
             Argument *arg      = cmd->args[i];
+            assert(arg != NULL);
+            assert(arg->name != NULL);
+
             boolean   required = argumentIsRequired(arg);
             boolean   multi    = argumentIsArray(arg);
+
+            if (required && multi && arg->minCount > 1) {
+                for (usize j = 0; j < arg->minCount - 1; ++j) {
+                    printf("<%s> ", arg->name);
+                }
+            }
+
             printf("%s<%s>%s", !required && i > 0 ? "[" : "", cmd->args[i]->name, !required && i > 0 ? "]" : "");
 
             if (multi) {
@@ -209,9 +204,14 @@ static int usageCmd(Command *cmd, Option **defaultOpts, usize defaultOptsCount) 
         if (!hasRequiredArgs) {
             printf("]");
         }
-
     }
     printf("\n");
+
+    if (cmd->aliases) {
+        for (usize i = 0; i < cmd->aliasesCount; ++i) {
+            printf("  %s\n", cmd->aliases[i]);
+        }
+    }
 
     uint optWidth =
         max(optionGetPrintWidth(cmd->opts, cmd->optsCount), optionGetPrintWidth(defaultOpts, defaultOptsCount));
@@ -219,7 +219,7 @@ static int usageCmd(Command *cmd, Option **defaultOpts, usize defaultOptsCount) 
     uint width    = max(optWidth, argWidth);
 
     printf("\n");
-    printf(YELLOW "Options:\n" NO_COLOUR);
+    pcolor(YELLOW, "Options:\n");
     if (cmd->optsCount > 0) {
         optionPrintAll(cmd->opts, cmd->optsCount, width);
     }
@@ -227,17 +227,37 @@ static int usageCmd(Command *cmd, Option **defaultOpts, usize defaultOptsCount) 
 
     if (cmd->argsCount > 0) {
         printf("\n");
-        printf(YELLOW "Arguments:\n" NO_COLOUR);
+        pcolor(YELLOW, "Arguments:\n");
         argumentPrintAll(cmd->args, cmd->argsCount, width);
     }
 
     if (cmd->additionalInfo) {
         printf("\n");
-        printf(YELLOW "Help:\n" NO_COLOUR);
+        pcolor(YELLOW, "Help:\n");
         printf("  %s\n", cmd->additionalInfo);
     }
 
     return 1;
+}
+
+static int usageStringCmd(Command *cmd) {
+    printf(COLOR(GREEN));
+    printf("%s", cmd->name);
+
+    for (usize i = 0; i < cmd->optsCount; ++i) {
+        optionPrintTag(cmd->opts[i]);
+    }
+
+    if (cmd->argsCount > 0) {
+        printf(" [--]");
+        for (usize i = 0; i < cmd->argsCount; ++i) {
+            argumentPrintTag(cmd->args[i]);
+        }
+    }
+
+    printf("%s\n", NO_COLOUR);
+
+    return EXIT_FAILURE;
 }
 
 static int
@@ -259,7 +279,9 @@ doRunCommand(Command *cmd, int argc, string argv[], uint offset, Option **defaul
     argumentValidateOrder(cmd->args, cmd->argsCount);
     string err = parseArgs(opts, optsCount, cmd->args, cmd->argsCount, argc, argv, offset);
 
-    // handle opts
+    // handle default opts
+    handleDefaultOpts(defaultOpts, defaultOptsCount);
+
     boolean wantsHelp = optionGetBool(opts, optsCount, "help");
     if (wantsHelp) {
         usageCmd(cmd, defaultOpts, defaultOptsCount);
@@ -269,8 +291,10 @@ doRunCommand(Command *cmd, int argc, string argv[], uint offset, Option **defaul
 
     // args error, exit
     if (err) {
-        printError(err);
+        printErrorLarge(err);
         free(err);
+        printNewLine();
+        usageStringCmd(cmd);
         cleanup(cmd);
         return EXIT_FAILURE;
     }
@@ -312,6 +336,88 @@ static void cleanup(Command *cmd) {
         arg->values      = NULL;
         arg->valuesCount = 0;
     }
+}
+
+static boolean handleAnsiOpt(Option **opts, usize optsCount) {
+    Option *opt = optionFind(opts, optsCount, "ansi", NULL);
+
+    if (!opt) {
+        return false;
+    }
+
+    if (opt->provided) {
+        if (opt->boolValue) {
+            enableAnsi();
+        } else {
+            disableAnsi();
+        }
+    }
+
+    return opt->provided;
+}
+
+static boolean handleVerbosityOpt(Option **opts, usize optsCount) {
+    Option *opt = optionFind(opts, optsCount, "verbose", NULL);
+
+    if (!opt || !opt->provided || opt->levelValue <= 0) {
+        return false;
+    }
+
+    uint verbosity = opt->levelValue;
+
+    if (verbosity > 0) {
+        switch (verbosity + 1) {
+            case LOG_LEVEL_ERROR:
+                setLogLevel(LOG_LEVEL_ERROR);
+                break;
+            case LOG_LEVEL_WARNING:
+                setLogLevel(LOG_LEVEL_WARNING);
+                break;
+            case LOG_LEVEL_INFO:
+                setLogLevel(LOG_LEVEL_INFO);
+                break;
+            case LOG_LEVEL_DEBUG:
+                setLogLevel(LOG_LEVEL_DEBUG);
+                break;
+            case LOG_LEVEL_QUIET:
+            default:
+                break;
+        }
+    }
+
+    return true;
+}
+
+static boolean handleQuietOpt(Option **opts, usize optsCount) {
+    Option *opt = optionFind(opts, optsCount, "quiet", "q");
+
+    if (!opt) {
+        return false;
+    }
+
+    if (opt->boolValue) {
+        setLogLevel(LOG_LEVEL_QUIET);
+    }
+
+    return opt->provided;
+}
+
+static uint handleDefaultOpts(Option **opts, usize optsCount) {
+    uint offset = 0;
+
+    if (handleAnsiOpt(opts, optsCount)) {
+        ++offset;
+    }
+
+    if (handleVerbosityOpt(opts, optsCount)) {
+        ++offset;
+    }
+
+    if (handleQuietOpt(opts, optsCount)) {
+        ++offset;
+    }
+
+    return offset;
 }
 
 #endif // CLI_IMPLEMENTATION

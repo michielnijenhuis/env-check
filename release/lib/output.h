@@ -3,8 +3,9 @@
 
 #include "colors.h"
 
-#include <stdarg.h>
 #include <assert.h>
+#include <stdarg.h>
+#include <string.h>
 
 // ==== Defines ===============================================================/
 #ifndef ERROR_PREFIX
@@ -39,6 +40,14 @@
 # define DEBUG_COLOR CYAN
 #endif // DEBUG_COLOR
 
+#ifndef ERROR_BANNER_COLOR
+# define ERROR_BANNER_COLOR RED_BG_WHITE_TEXT
+#endif // ERROR_BANNER_COLOR
+
+#ifndef ERROR_BUFFER_MAX
+# define ERROR_BUFFER_MAX 1024
+#endif // ERROR_BUFFER_MAX
+
 // ==== Typedefs ==============================================================/
 typedef enum LogLevel {
     LOG_LEVEL_QUIET   = 0,
@@ -53,12 +62,14 @@ void            setLogLevel(LogLevel level);
 void            writeln(cstring format, ...);
 void            print(LogLevel logLevel, cstring format, ...);
 void            printError(cstring format, ...);
+void            printErrorLarge(cstring format, ...);
 void            printWarning(cstring format, ...);
 void            printInfo(cstring format, ...);
 void            printDebug(cstring format, ...);
 void            printNewLine(void);
 boolean         canPrint(LogLevel logLevel);
 
+static void     ERR(cstring msg);
 static LogLevel LOG_LEVEL = LOG_LEVEL_ERROR;
 
 // ==== Implementations =======================================================/
@@ -76,19 +87,19 @@ void print(LogLevel logLevel, cstring format, ...) {
                 return;
             }
             case LOG_LEVEL_ERROR: {
-                printf(ERROR_COLOR ERROR_PREFIX);
+                printf("%s" ERROR_PREFIX, COLOR(ERROR_COLOR));
                 break;
             }
             case LOG_LEVEL_WARNING: {
-                printf(WARNING_COLOR WARNING_PREFIX);
+                printf("%s" WARNING_PREFIX, COLOR(WARNING_COLOR));
                 break;
             }
             case LOG_LEVEL_INFO: {
-                printf(INFO_COLOR INFO_PREFIX);
+                printf("%s" INFO_PREFIX, COLOR(INFO_COLOR));
                 break;
             }
             case LOG_LEVEL_DEBUG: {
-                printf(DEBUG_COLOR DEBUG_PREFIX);
+                printf("%s" DEBUG_PREFIX, COLOR(DEBUG_COLOR));
                 break;
             }
         }
@@ -116,6 +127,30 @@ void writeln(cstring format, ...) {
     printNewLine();
 }
 
+static void ERR(cstring msg) {
+    string red = "\033[41;37m";
+    // ANSI escape codes for colored text
+    printf("\n"
+           "%s",
+           red); // Set background to red and text to white
+
+    int padding  = 4;
+    int colorlen = strlen(red);
+    int len      = strlen(msg);
+    int width    = len + padding + colorlen;
+    // Vertical padding above the printed statement
+    printf("%-*.*s%s\n", width, width, red, NO_COLOUR);
+
+    // Padding added to the printed statement
+    printf("%s%-*s%-*.*s%s\n", red, padding / 2, "", len + (padding / 2), width, msg, NO_COLOUR);
+
+    // Vertical padding below the printed statement
+    printf("%-*.*s%s\n", width, width, red, NO_COLOUR);
+
+    // Reset colors
+    printf(NO_COLOUR);
+}
+
 void printError(cstring format, ...) {
     assert(format != NULL);
 
@@ -123,12 +158,32 @@ void printError(cstring format, ...) {
         return;
     }
 
-    printf(ERROR_COLOR ERROR_PREFIX);
+    printf("%s" ERROR_PREFIX, COLOR(ERROR_COLOR));
     va_list args;
     va_start(args, format);
     vprintf(format, args);
     va_end(args);
     printf(NO_COLOUR "\n");
+}
+
+void printErrorLarge(cstring format, ...) {
+    assert(format != NULL);
+
+    if (!canPrint(LOG_LEVEL_ERROR)) {
+        return;
+    }
+
+    char buffer[ERROR_BUFFER_MAX];
+    va_list args;
+    va_start(args, format);
+    vsprintf(buffer, format, args);
+    va_end(args);
+
+    if (canUseAnsi()) {
+        ERR(buffer);
+    } else {
+        printf("%s\n", buffer);
+    }
 }
 
 void printWarning(cstring format, ...) {
@@ -138,7 +193,7 @@ void printWarning(cstring format, ...) {
         return;
     }
 
-    printf(WARNING_COLOR WARNING_PREFIX);
+    printf("%s" WARNING_PREFIX, COLOR(WARNING_COLOR));
     va_list args;
     va_start(args, format);
     vprintf(format, args);
@@ -153,7 +208,7 @@ void printInfo(cstring format, ...) {
         return;
     }
 
-    printf(INFO_COLOR INFO_PREFIX);
+    printf("%s" INFO_PREFIX, COLOR(INFO_COLOR));
     va_list args;
     va_start(args, format);
     vprintf(format, args);
@@ -168,7 +223,7 @@ void printDebug(cstring format, ...) {
         return;
     }
 
-    printf(DEBUG_COLOR DEBUG_PREFIX);
+    printf("%s" DEBUG_PREFIX, COLOR(DEBUG_COLOR));
     va_list args;
     va_start(args, format);
     vprintf(format, args);

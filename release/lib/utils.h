@@ -3,6 +3,7 @@
 
 #include "types.h"
 #include "colors.h"
+#include "output.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -26,7 +27,7 @@ boolean directoryExists(cstring dirName);
 # define UTILS_INCLUDED
 
 void printErr(cstring msg) {
-    fprintf(stderr, "%s[ERROR]%s %s\n", RED_BOLD, NO_COLOUR, msg);
+    fprintf(stderr, "%s[ERROR]%s %s\n", COLOR(RED_BOLD), NO_COLOUR, msg);
 }
 
 void panic(cstring msg) {
@@ -43,14 +44,14 @@ boolean fileExists(cstring fileName) {
 int fileNotFoundError(cstring fileName) {
     char errorMsg[FILENAME_MAX];
     sprintf(errorMsg, "File '%s' does not exist.", fileName);
-    printErr(errorMsg);
+    printErrorLarge(errorMsg);
     return EXIT_FAILURE;
 }
 
 int failedToOpenFileError(cstring fileName) {
     char errorMsg[FILENAME_MAX];
     sprintf(errorMsg, "Failed to open file '%s'.", fileName);
-    printErr(errorMsg);
+    printErrorLarge(errorMsg);
     return EXIT_FAILURE;
 }
 
