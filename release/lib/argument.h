@@ -29,6 +29,7 @@ typedef struct Argument {
     string  value;
     string *values;
     usize   valuesCount;
+    usize   minCount;
     int     flags;
 } Argument;
 
@@ -36,12 +37,14 @@ typedef struct Argument {
 void      argumentInit(Argument *arg, cstring name, cstring description);
 void      argumentSetFlag(Argument *arg, int flag);
 void      argumentAddFlags(Argument *arg, int flags);
-void      argumentMakeRequired(Argument *arg, string defaultValue);
-void      argumentMakeArray(Argument *arg, boolean required);
+void      argumentMakeRequired(Argument *arg);
+void      argumentMakeArray(Argument *arg, usize min);
+void      argumentSetDefaultValue(Argument *arg, string defaultValue);
 Argument  argumentCreate(cstring name, cstring description);
 string    argumentGet(Argument **args, usize argsCount, cstring name);
 int       argumentIndexOf(Argument **args, usize argsSize, cstring name);
 Argument *argumentFind(Argument **args, usize argsSize, cstring name);
+void      argumentPrintTag(Argument *arg);
 void      argumentPrint(Argument *arg, uint width);
 void      argumentPrintAll(Argument **args, usize argsCount, uint width);
 uint      argumentGetPrintWidth(Argument **args, usize argsCount);
@@ -53,12 +56,14 @@ boolean   argumentIsArray(Argument *arg);
 // ==== Implementations =======================================================/
 void argumentInit(Argument *arg, cstring name, cstring description) {
     assert(arg != NULL);
+    assert(name != NULL);
 
     arg->name        = name;
     arg->description = description;
     arg->value       = NULL;
     arg->values      = NULL;
     arg->valuesCount = 0;
+    arg->minCount    = 0;
     arg->flags       = ARGUMENT_OPTIONAL;
 }
 
@@ -106,13 +111,32 @@ Argument *argumentFind(Argument **args, usize argsSize, cstring name) {
     return index == -1 ? NULL : args[index];
 }
 
+void argumentPrintTag(Argument *arg) {
+    assert(arg != NULL);
+    assert(arg->name != NULL);
+    boolean optional = argumentIsOptional(arg);
+    boolean multi    = argumentIsArray(arg);
+    printf(" ");
+    if (optional) {
+        printf("[");
+    }
+    printf("<%s>", arg->name);
+    if (multi) {
+        printf("...");
+    }
+    if (optional) {
+        printf("]");
+    }
+}
+
 void argumentPrint(Argument *arg, uint width) {
     assert(arg != NULL);
 
-    printf("  " GREEN "%-*s" NO_COLOUR "%s", width + 2, arg->name, arg->description);
+    pcolorf(GREEN, "  %-*s", width + 2, arg->name);
+    printf("%s", arg->description);
 
     if (argumentIsOptional(arg) && arg->value) {
-        printf(" %s[default: %s]%s", YELLOW, arg->value, NO_COLOUR);
+        pcolorf(YELLOW, " [default: %s]", arg->value);
     }
 
     printf("\n");
@@ -135,7 +159,10 @@ uint argumentGetPrintWidth(Argument **args, usize argsCount) {
 }
 
 void argumentValidateOrder(Argument **args, usize argsCount) {
-    assert(args != NULL);
+    if (argsCount > 0) {
+        assert(args != NULL);
+    }
+    
     int state = ARGUMENT_REQUIRED;
 
     for (usize i = 0; i < argsCount; ++i) {
@@ -173,17 +200,23 @@ boolean argumentIsArray(Argument *arg) {
     return arg->flags & ARGUMENT_ARRAY;
 }
 
-void argumentMakeRequired(Argument *arg, string defaultValue) {
+void argumentMakeRequired(Argument *arg) {
     if (arg) {
         argumentSetFlag(arg, ARGUMENT_REQUIRED);
+    }
+}
+
+void argumentSetDefaultValue(Argument *arg, string defaultValue) {
+    if (arg) {
         arg->value = defaultValue;
     }
 }
 
-void argumentMakeArray(Argument *arg, boolean required) {
+void argumentMakeArray(Argument *arg, usize min) {
     if (arg) {
         argumentSetFlag(arg, ARGUMENT_ARRAY);
-        argumentAddFlags(arg, required ? ARGUMENT_REQUIRED : ARGUMENT_OPTIONAL);
+        argumentAddFlags(arg, min > 0 ? ARGUMENT_REQUIRED : ARGUMENT_OPTIONAL);
+        arg->minCount = min;
     }
 }
 

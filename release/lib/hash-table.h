@@ -3,6 +3,7 @@
 
 #include "types.h"
 
+#include <assert.h>
 #include <ctype.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -44,6 +45,7 @@ typedef struct HashTable {
 } HashTable;
 
 HashTable        hashTableCreate(u32 capacity, HashTableBucket **buckets, HashTableConfig *config);
+void             hashTableInit(HashTable *table, u32 capacity, HashTableBucket **buckets, HashTableConfig *config);
 HashTable       *hashTableCreateMalloc(u32 capacity, HashTableBucket **buckets, HashTableConfig *config);
 HashTableConfig  hashTableCreateConfig(boolean      cleanupBucket,
                                        boolean      cleanupBuckets,
@@ -81,19 +83,21 @@ boolean handleHashTableInsertAtIndex(HashTable *self, u32 index, HashTableBucket
 
 HashTable hashTableCreate(u32 capacity, HashTableBucket **buckets, HashTableConfig *config) {
     HashTable self;
-    self.capacity = capacity;
-    self.config   = config;
-    self.entries  = buckets;
-    self.size     = 0;
+    hashTableInit(&self, capacity, buckets, config);
     return self;
+}
+
+void hashTableInit(HashTable *table, u32 capacity, HashTableBucket **buckets, HashTableConfig *config) {
+    assert(table != NULL);
+    table->capacity = capacity;
+    table->entries  = buckets;
+    table->size     = 0;
+    table->config = config;
 }
 
 HashTable *hashTableCreateMalloc(u32 capacity, HashTableBucket **buckets, HashTableConfig *config) {
     HashTable *self = malloc(sizeof(*self));
-    self->capacity  = capacity;
-    self->config    = config;
-    self->entries   = buckets;
-    self->size      = 0;
+    hashTableInit(self, capacity, buckets, config);
     return self;
 }
 

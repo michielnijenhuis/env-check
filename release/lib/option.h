@@ -54,6 +54,7 @@ typedef struct Option {
     cstring name;
     cstring shortcut;
     cstring desc;
+    boolean provided;
     uint    levelValue; // todo: try out using a union
     string  stringValue;
     boolean boolValue;
@@ -79,6 +80,7 @@ boolean optionGetBool(Option **opts, usize optsCount, cstring name);
 string  optionGetString(Option **opts, usize optsCount, cstring name);
 string *optionGetStrings(Option **opts, usize optsCount, cstring name);
 uint    optionGetPrintWidth(Option **opts, usize optsCount);
+void    optionPrintTag(Option *opt);
 void    optionPrint(Option *opt, uint width);
 void    optionPrintAll(Option **opts, usize optsCount, uint width);
 void    optionSort(Option **opts, usize optsCount);
@@ -91,14 +93,17 @@ boolean optionIsLevel(Option *opt);
 boolean optionIsString(Option *opt);
 boolean optionIsArray(Option *opt);
 boolean optionExpectsValue(Option *opt);
+boolean optionWasProvided(Option *opt);
 
 // ==== Implementations =======================================================/
 void optionInit(Option *opt, cstring name, cstring shortcut, cstring desc) {
     assert(opt != NULL);
+    assert(name != NULL);
 
     opt->shortcut    = shortcut;
     opt->name        = name;
     opt->desc        = desc;
+    opt->provided    = false;
     opt->boolValue   = false;
     opt->levelValue  = 0;
     opt->stringValue = NULL;
@@ -126,7 +131,7 @@ Option optionCreateBoolOpt(cstring name, cstring shortcut, cstring desc, boolean
     Option opt;
     optionInit(&opt, name, shortcut, desc);
     if (negatable) {
-        optionSetFlag(&opt, OPTION_VALUE_NEGATABLE);
+        optionAddFlags(&opt, OPTION_VALUE_NEGATABLE);
     }
     opt.boolValue = defaultVal;
     return opt;
@@ -172,12 +177,29 @@ int optionIndexOf(Option **opts, usize optsCount, cstring name, cstring shortcut
         return -1;
     }
 
+    assert(name != NULL || shortcut != NULL);
+
+    boolean mightBeNegating = cstringStartsWith(name, "no-");
+
     for (usize i = 0; i < optsCount; ++i) {
         Option *opt = opts[i];
         assert(opt != NULL);
+        assert(opt->name != NULL);
 
-        if (opt->name && name && cstringEquals(opt->name, name)) {
-            return i;
+        if (name) {
+            if (cstringEquals(opt->name, name)) {
+                return i;
+            }
+
+            if (mightBeNegating && optionIsNegatable(opt)) {
+                char negatingName[strlen(opt->name) + 1 + 3];
+                strcpy(negatingName, "no-");
+                strcat(negatingName, opt->name);
+
+                if (cstringEquals(negatingName, name)) {
+                    return i;
+                }
+            }
         } else if (opt->shortcut && shortcut && cstringEquals(opt->shortcut, shortcut)) {
             return i;
         }
@@ -204,6 +226,24 @@ string optionGetString(Option **opts, usize optsCount, cstring name) {
 string *optionGetStrings(Option **opts, usize optsCount, cstring name) {
     Option *opt = optionFind(opts, optsCount, name, NULL);
     return opt ? opt->stringArray : NULL;
+}
+
+void optionPrintTag(Option *opt) {
+    assert(opt != NULL);
+    assert(opt->name != NULL);
+
+    printf(" [");
+    if (opt->shortcut) {
+        printf("-%c|", opt->shortcut[0]);
+    }
+    printf("--%s", opt->name);
+    if (optionIsNegatable(opt)) {
+        printf("|no-%s", opt->name);
+    } else if (optionHasValue(opt)) {
+        char capitalized[strlen(opt->name) + 1];
+        printf(" %s", stringToCstring(stringToUpper(stringFrom(opt->name), capitalized)));
+    }
+    printf("]");
 }
 
 void optionPrint(Option *opt, uint width) {
@@ -234,11 +274,13 @@ void optionPrint(Option *opt, uint width) {
             shortStr[1] = '\0';
             strcat(name, shortStr);
         }
+
+        strcat(name, ", ");
     } else {
-        strcpy(name, " ");
+        strcpy(name, "    ");
     }
 
-    strcat(name, ", --");
+    strcat(name, "--");
     strcat(name, opt->name);
 
     // print long
@@ -248,9 +290,12 @@ void optionPrint(Option *opt, uint width) {
         char capitalized[nameLen + 1];
         strcat(name, "=");
         strcat(name, stringToCstring(stringToUpper(stringFrom(opt->name), capitalized)));
+    } else if (optionIsNegatable(opt)) {
+        strcat(name, "|--no-");
+        strcat(name, opt->name);
     }
 
-    printf("  %s%-*s%s", GREEN, width + 2, name, NO_COLOUR);
+    pcolorf(GREEN, "  %-*s", width + 2, name);
 
     // desc
     if (opt->desc) {
@@ -259,7 +304,7 @@ void optionPrint(Option *opt, uint width) {
 
     // default value
     if (opt->stringValue) {
-        printf(" %s[default: %s]%s", YELLOW, opt->stringValue, NO_COLOUR);
+        pcolorf(YELLOW, " [default: %s]", opt->stringValue);
     }
 
     printf("\n");
@@ -270,25 +315,31 @@ uint optionGetPrintWidth(Option **opts, usize optsCount) {
 
     uint width = 4; // base for short options ("-X, ")
     for (usize i = 0; i < optsCount; ++i) {
-        Option *opt  = opts[i];
-        uint    base = 4;
+        Option *opt = opts[i];
+        assert(opt != NULL);
+        assert(opt->name != NULL);
+        uint base = 4;
 
         if (optionIsLevel(opt)) {
+            // e.g. "-v|vv|vvv, "
             u32 chars = (u32) ceil(((OPTION_MAX_LEVEL / 2) + 0.5) * OPTION_MAX_LEVEL) + 1;
             base      = chars + (OPTION_MAX_LEVEL - 1) + 3;
-            // e.g. "-v|vv|vvv, "
         }
 
         usize len = strlen(opt->name);
 
-        // e.g. "name=NAME"
         if (optionHasValue(opt)) {
+            // e.g. "name=NAME"
             len = ((len * 2) + 1);
+        } else if (optionIsNegatable(opt)) {
+            // e.g. "--name|--no-name"
+            len = ((len * 2) + 6);
         }
 
         uint requiredWidth = len + base + 2; // add 2 for the prefixing "--"
         width              = max(width, requiredWidth);
     }
+
     return width;
 }
 
@@ -376,6 +427,11 @@ boolean optionIsArray(Option *opt) {
 boolean optionExpectsValue(Option *opt) {
     assert(opt != NULL);
     return opt->__flags & OPTION_VALUE_REQUIRED;
+}
+
+boolean optionWasProvided(Option *opt) {
+    assert(opt != NULL);
+    return opt->provided;
 }
 
 #endif // OPTION_H

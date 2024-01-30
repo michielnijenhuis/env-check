@@ -17,12 +17,23 @@
 #include <string.h>
 
 //=== Defines ================================================================//
-#define ENVC_EXECUTABLE "envc"
-#define ENVC_NAME       "Env Check"
+#define ENVC_NAME "Env Check"
+
 #ifndef ENVC_VERSION
 # define ENVC_VERSION NULL
 #endif // ENVC_VERSION
-#define MALLOC_ERR printError("Memory allocation failed.")
+
+#define ENVC_ASCII_ART                                                         \
+    "\
+ _____ _   ___     __   ____ _   _ _____ ____ _  __ \n\
+| ____| \\ | \\ \\   / /  / ___| | | | ____/ ___| |/ / \n\
+|  _| |  \\| |\\ \\ / /  | |   | |_| |  _|| |   | ' /  \n\
+| |___| |\\  | \\ V /   | |___|  _  | |__| |___| . \\  \n\
+|_____|_| \\_|  \\_/     \\____|_| |_|_____\\____|_|\\_\\ \n\
+                                                   \
+                          "
+
+#define MALLOC_ERR printErrorLarge("Memory allocation failed.")
 
 //=== Typedefs ===============================================================//
 typedef enum EnvVarStatus {
@@ -157,13 +168,9 @@ int main(int argc, string argv[]) {
 
     //=== Env Check ==========================================================//
     Command *commands[] = {&compareCmd, &listCmd};
-    Program  program    = {
-            .executableName = ENVC_EXECUTABLE,
-            .name           = ENVC_NAME,
-            .version        = ENVC_VERSION,
-            .commands       = commands,
-            .commandsCount  = ARRAY_LEN(commands),
-    };
+    Program  program    = programCreate(ENVC_NAME, ENVC_VERSION);
+    programSetSubcommands(&program, commands, ARRAY_LEN(commands));
+    programSetAsciiArt(&program, ENVC_ASCII_ART);
 
     return runApplication(&program, argc, argv);
 }
@@ -530,7 +537,7 @@ int readEnvFile(HashTable *table,
     }
 
     if (ignoreSize > 0 && focusSize > 0) {
-        printError(
+        printErrorLarge(
             "Cannot read env file while taking both ignore and focus arguments.");
         return EXIT_FAILURE;
     }

@@ -40,7 +40,7 @@ parseArgs(Option **opts, usize optsCount, Argument **args, usize argsCount, int 
                     Argument *expectedArg = args[currentArgIndex];
                     char      errorMsg[128];
                     sprintf(errorMsg,
-                            "Invalid args. Expected argument '%s', but received option '%s'.",
+                            "Invalid args. Expected argument '%s', but received option '%s'",
                             expectedArg->name,
                             currentArg);
                     return strdup(errorMsg);
@@ -89,6 +89,8 @@ parseArgs(Option **opts, usize optsCount, Argument **args, usize argsCount, int 
                             } else {
                                 opt->boolValue = true;
                             }
+
+                            opt->provided = true;
                         } else {
                             char strName[2];
                             strName[0] = sanitizedArg[j];
@@ -165,10 +167,11 @@ parseArgs(Option **opts, usize optsCount, Argument **args, usize argsCount, int 
 
         // array: ensure 1+ values
         if (argumentIsArray(arg)) {
-            if (arg->valuesCount < 1) {
+            if (arg->valuesCount < arg->minCount) {
                 char errorMsg[128];
-                sprintf(errorMsg, "Argument '%s' requires at least 1 value.", arg->name);
+                sprintf(errorMsg, "Argument '%s' requires at least %zu %s", arg->name, arg->minCount, arg->minCount == 1 ? "value" : "values");
                 return strdup(errorMsg);
+
             }
 
             continue;
@@ -177,7 +180,7 @@ parseArgs(Option **opts, usize optsCount, Argument **args, usize argsCount, int 
         // required arg: ensure value was given
         if (arg->value == NULL) {
             char errorMsg[128];
-            sprintf(errorMsg, "Argument '%s' is required, but no value was provided.", arg->name);
+            sprintf(errorMsg, "Argument '%s' is required, but no value was provided", arg->name);
             return strdup(errorMsg);
         }
     }
@@ -225,18 +228,24 @@ string *getStringArrayOpt(Command *cmd, cstring name) {
 
 static string handleUnknownOption(cstring name) {
     char errorMsg[128];
-    sprintf(errorMsg, "Received unknown option: %s.", name);
+    sprintf(errorMsg, "Received unknown option: %s", name);
     return strdup(errorMsg);
 }
 
 static string handleOptValue(Option *opt, string name, string value) {
+    opt->provided = true;
+
     if (optionIsLevel(opt)) {
         opt->levelValue = min(opt->levelValue + 1, OPTION_MAX_LEVEL);
     } else if (optionIsBool(opt) && !value) {
-        opt->boolValue = optionIsNegatable(opt) ? false : true;
+        if (optionIsNegatable(opt) && cstringStartsWith(name, "no-")) {
+            opt->boolValue = false;
+        } else {
+            opt->boolValue = true;
+        }
     } else if (optionExpectsValue(opt) && !value) {
         char errorMsg[256];
-        sprintf(errorMsg, "Missing required value for option %s.", name);
+        sprintf(errorMsg, "Missing required value for option %s", name);
         return strdup(errorMsg);
     } else if (optionHasValue(opt) && value) {
         string pValue = malloc(sizeof(char) * (strlen(value) + 1));
@@ -260,9 +269,13 @@ static string handleOptValue(Option *opt, string name, string value) {
             opt->__meta |= OPTION_META_CLEANUP_VALUE;
         }
     } else {
-        printf("Unknown case\n");
-        // known cases:
-        // 1) optional value, not boolean, no value provided -> do nothing
+        #ifndef NDEBUG
+         printf("[DEBUG] Unknown handleOpt() case:\n");
+         printf("  name: %s\n", name);
+         printf("  value: %s\n", value);
+         printf("  flags: %d\n", opt->__flags);
+         printf("\n");
+        #endif
     }
 
     return NULL;
