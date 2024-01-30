@@ -148,6 +148,8 @@ int main(int argc, string argv[]) {
                             &cmp__divergentOpt};
     compareCmd.opts      = cmd__opts;
     compareCmd.optsCount = ARRAY_LEN(cmd__opts);
+    cstring aliases[] = {"compare", "c"};
+    commandSetAliases(&compareCmd, aliases, ARRAY_LEN(aliases));
 
     //=== List ===============================================================//
     Command listCmd = commandCreate(

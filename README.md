@@ -2,12 +2,21 @@
 A program that compares two .env files and shows their values and differences.
 
 ## Usage:
-  envc <command> [opts] [args...]
+```sh
+command [options] [arguments]
+```
 
 ## Options:
-  - -h, --help | Display help for the given command.
-  - -v, --version | Show the current version of the program.
+```sh
+-h, --help              Display help for the given command.
+-q, --quiet             Do not output any message.
+    --ansi|no-ansi      Force (or disable) ANSI output.
+-V, --version           Show the current version of the program.
+-v|vv|vvv, --verbose    Set the log level for the program.
+```
 
 ## Available commands:
-  - cmp | Compares two env files files.
-  - list | Lists all variables in the target env file, sorted alphabetically.
+```sh
+cmp     Compares two env files files.
+list    Lists all variables in the target env file, sorted alphabetically.
+```
