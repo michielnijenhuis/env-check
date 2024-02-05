@@ -59,4 +59,4 @@ printf "\n\n" >> "$BUILD_SCRIPT"
 cp "src/main.c" "release/main.c"
 # TODO: replace include paths in main.c
 
-compile -r -o bin/main src/main
+compile -r -DENVC_VERSION=\\\""$VERSION"\\\" -o bin/main src/main
