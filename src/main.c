@@ -1,16 +1,12 @@
 //=== Includes ===============================================================//
-#define UTILS_IMPLEMENTATION
-#include "lib/utils.h"
-#define ARRAY_LIST_IMPLEMENTATION
-#include "lib/array-list.h"
-#define HASH_TABLE_IMPLEMENTATION
-#include "lib/hash-table.h"
-#define CLI_IMPLEMENTATION
-#include "lib/cli.h"
-#include "lib/types.h"
-
 #include <assert.h>
 #include <ctype.h>
+#include <lib-array-list.h>
+#include <lib-cli.h>
+#include <lib-hash-table.h>
+#include <lib-input.h>
+#include <lib-types.h>
+#include <lib-utils.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -148,7 +144,7 @@ int main(int argc, string argv[]) {
                             &cmp__divergentOpt};
     compareCmd.opts      = cmd__opts;
     compareCmd.optsCount = ARRAY_LEN(cmd__opts);
-    cstring aliases[] = {"compare", "c"};
+    cstring aliases[]    = {"compare", "c"};
     commandSetAliases(&compareCmd, aliases, ARRAY_LEN(aliases));
 
     //=== List ===============================================================//
