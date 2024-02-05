@@ -1,3 +1,4 @@
 bin/main
 obj/main.o
 src/lib/*
+.clang-format

@@ -9,7 +9,6 @@ fi
 
 rm -rf ./release/**
 
-# Use a for loop to iterate through each file in the directory
 LIBS=(
     "argument"
     "array-list"
@@ -57,6 +56,5 @@ done
 printf "\n\n" >> "$BUILD_SCRIPT"
 
 cp "src/main.c" "release/main.c"
-# TODO: replace include paths in main.c
 
 compile -r -DENVC_VERSION=\\\""$VERSION"\\\" -o bin/main src/main
