@@ -1,4 +1,4 @@
 bin/main
-obj/main.o
-src/lib/*
+src/main.dSYM
+src/main
 .clang-format
