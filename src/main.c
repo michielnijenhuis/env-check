@@ -54,7 +54,8 @@ typedef struct EnvVar {
 
 DEFINE_HASH_MAP(HT, EnvVar *);
 
-//=== Prototypes ===================================================================//
+//=== Prototypes
+//===================================================================//
 HT      ht_create(size_t cap);
 void    ht_free(HT *ht);
 EnvVar *ht_get(HT *ht, const char *key);
@@ -119,7 +120,7 @@ int main(int argc, char **argv) {
                                  &cmp_divergent_opt};
     compare_cmd.optv          = cmp_opts;
     compare_cmd.optc          = ARRAY_LEN(cmp_opts);
-    const char *aliasv[]      = {"compare", "c"};
+    const char *aliasv[]      = {"compare"};
     command_set_aliases(&compare_cmd, aliasv, ARRAY_LEN(aliasv));
 
     //=== List ===============================================================//
