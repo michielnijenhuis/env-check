@@ -18,8 +18,9 @@ typedef enum OptionFlag {
 } OptionFlag;
 
 typedef enum OptionMetaFlag {
-    OPTION_META_CLEANUP_VALUE       = 1 << 0,
-    OPTION_META_CLEANUP_VALUE_ARRAY = 1 << 1,
+    OPTION_META_CLEANUP_OPT         = 1 << 0,
+    OPTION_META_CLEANUP_VALUE       = 1 << 1,
+    OPTION_META_CLEANUP_VALUE_ARRAY = 1 << 2,
     // OPTION_META_TYPE_LEVEL          = 1 << 2,
     // OPTION_META_TYPE_BOOL           = 1 << 3,
     // OPTION_META_TYPE_STRING         = 1 << 4,

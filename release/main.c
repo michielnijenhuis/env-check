@@ -54,7 +54,8 @@ typedef struct EnvVar {
 
 DEFINE_HASH_MAP(HT, EnvVar *);
 
-//=== Prototypes ===================================================================//
+//=== Prototypes
+//===================================================================//
 HT      ht_create(size_t cap);
 void    ht_free(HT *ht);
 EnvVar *ht_get(HT *ht, const char *key);
@@ -119,7 +120,7 @@ int main(int argc, char **argv) {
                                  &cmp_divergent_opt};
     compare_cmd.optv          = cmp_opts;
     compare_cmd.optc          = ARRAY_LEN(cmp_opts);
-    const char *aliasv[]      = {"compare", "c"};
+    const char *aliasv[]      = {"compare"};
     command_set_aliases(&compare_cmd, aliasv, ARRAY_LEN(aliasv));
 
     //=== List ===============================================================//
@@ -154,7 +155,7 @@ EnvVar *ht_get(HT *ht, const char *key) {
 }
 
 bool ht_put(HT *ht, const char *key, EnvVar *value) {
-    HT_PUT(HT, ht, key, value); // TODO: buggy
+    HT_PUT(HT, ht, key, value);
 }
 
 void ht_keys(HT *ht, const char **buffer, size_t buffersize) {
@@ -557,25 +558,28 @@ void print_title(const char *filename) {
 
 //=== Command impl ===========================================================//
 int handle_cmd(Command *self) {
-    char  *target       = get_string_opt(self, "target");
-    char  *source       = get_string_opt(self, "source");
-    char  *ignore       = get_string_opt(self, "ignore");
-    char  *key          = get_string_opt(self, "key");
-    char  *truncate     = get_string_opt(self, "truncate");
-    bool   missing      = get_bool_opt(self, "missing");
-    bool   undefined    = get_bool_opt(self, "undefined");
-    bool   divergent    = get_bool_opt(self, "divergent");
+    char *target       = get_string_opt(self, "target");
+    char *source       = get_string_opt(self, "source");
+    char *ignore       = get_string_opt(self, "ignore");
+    char *key          = get_string_opt(self, "key");
+    char *truncate     = get_string_opt(self, "truncate");
+    bool  missing      = get_bool_opt(self, "missing");
+    bool  undefined    = get_bool_opt(self, "undefined");
+    bool  divergent    = get_bool_opt(self, "divergent");
 
-    int    truncate_val = truncate ? atoi(truncate) : 0;
-    bool   selective    = missing || undefined || divergent;
-    bool   comparing    = source != NULL;
+    int   truncate_val = truncate ? atoi(truncate) : 0;
+    if (truncate_val > 0) {
+        truncate_val = max(truncate_val, 4);
+    }
+    bool   selective = missing || undefined || divergent;
+    bool   comparing = source != NULL;
 
-    size_t ignorec      = str_count_char(ignore, ',');
-    char  *ignorev[ignorec + 1];
+    size_t ignorec   = ignore ? str_count_char(ignore, ',') + 1 : 0;
+    char  *ignorev[ignorec];
     str_split_by_delim(ignore, ',', ignorev, ignorec);
 
-    size_t focusc = str_count_char(key, ',');
-    char  *focusv[focusc + 1];
+    size_t focusc = key ? str_count_char(key, ',') + 1 : 0;
+    char  *focusv[focusc];
     str_split_by_delim(key, ',', focusv, focusc);
 
     HT ht = ht_create(50);

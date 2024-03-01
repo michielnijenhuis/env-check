@@ -1,5 +1,12 @@
 #!/bin/bash
 
+CMD="$*"
+
+if [ -z "$CMD" ]; then
+	CMD="clang -Wall -O2"
+fi
+
 set -x
-"$@" -DENVC_VERSION=\"1.1.1\" -o ./envc main.c -L. -largument -lcli -lcolors -lfs -lcommand -lcstring -linput -loption -loutput -lprogram
+
+$CMD -DENVC_VERSION=\"1.1.1\" -o ./envc main.c -L. -largument -lcli -lcolors -lfs -lcommand -lcstring -linput -loption -loutput -lprogram -lusage
 
