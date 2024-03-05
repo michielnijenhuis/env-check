@@ -8,5 +8,7 @@ fi
 
 set -x
 
-$CMD -DENVC_VERSION=\"1.1.1\" -o ./envc main.c -L. -largument -lcli -lcolors -lfs -lcommand -lcstring -linput -loption -loutput -lprogram -lusage
+$CMD -DENVC_VERSION=\"1.1.1\" -I. -o ./envc main.c argument.c cli.c colors.c fs.c command.c cstring.c input.c option.c output.c program.c usage.c
+
+sudo cp ./envc /usr/local/bin
 

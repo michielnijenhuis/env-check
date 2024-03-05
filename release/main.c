@@ -1,5 +1,5 @@
 //=== Includes ===============================================================//
-#include "output.h"
+#include "cstring.h"
 
 #include <array.h>
 #include <assert.h>
@@ -40,130 +40,137 @@ typedef enum EnvVarStatus {
     MISSING   = 1,
     DIVERGENT = 2,
     UNDEFINED = 3,
-} EnvVarStatus;
+} env_var_status_t;
 
 typedef struct EnvVar {
-    char        *name;
-    char        *val;
-    char        *cmpval;
-    EnvVarStatus status;
-    size_t       namelen;
-    size_t       vallen;
-    size_t       cmpvallen;
-} EnvVar;
+    char            *name;
+    char            *val;
+    char            *cmpval;
+    env_var_status_t status;
+    size_t           namelen;
+    size_t           vallen;
+    size_t           cmpvallen;
+    bool             interlaced;
+} env_var_t;
 
-DEFINE_HASH_MAP(HT, EnvVar *);
+DEFINE_HASH_MAP(hash_table_t, env_var_t *);
 
 //=== Prototypes
 //===================================================================//
-HT      ht_create(size_t cap);
-void    ht_free(HT *ht);
-EnvVar *ht_get(HT *ht, const char *key);
-bool    ht_put(HT *ht, const char *key, EnvVar *value);
-void    ht_keys(HT *ht, const char **buf, size_t size);
-void    free_env_var(EnvVar *var);
-void    free_strings(char **strv, size_t strc);
-void    create_env_var_from_line(HT          *ht,
-                                 const char  *line,
-                                 const char **ignorev,
-                                 size_t       ignorec,
-                                 const char **focusv,
-                                 size_t       focusc,
-                                 bool         comparing);
-void    set_env_var_status(EnvVar *var);
-int     read_env_file(HT          *ht,
-                      const char  *path,
-                      const char **ignorev,
-                      size_t       ignorec,
-                      const char **focusv,
-                      size_t       focusc,
-                      bool         comparing);
-size_t  find_max_width_in_array(EnvVar **varv, size_t varc, bool name);
-void    trim_string(char *str);
-bool    is_numeric(const char *str);
-void    prepare_value_for_printing(const char *value, size_t vallen, char *buf, bool is_empty, int colwidth);
-void    print_env_var(const EnvVar *var, int first_colwidth, int second_colwidth, int third_colwidth, bool comparing);
-void    sort_env_vars_array(const char **keyv, size_t keyc);
-bool    match_pattern(const char *str, const char *pattern);
-void    print_title(const char *filename);
-int     handle_cmd(Command *self);
-int     list(Command *self);
-int     compare(Command *self);
+hash_table_t ht_create(size_t cap);
+void         ht_free(hash_table_t *ht);
+env_var_t   *ht_get(hash_table_t *ht, const char *key);
+bool         ht_put(hash_table_t *ht, const char *key, env_var_t *value);
+void         ht_keys(hash_table_t *ht, const char **buf, size_t size);
+void         free_env_var(env_var_t *var);
+void         free_strings(char **strv, size_t strc);
+void         create_env_var_from_line(hash_table_t *ht,
+                                      const char   *line,
+                                      const char  **ignorev,
+                                      size_t        ignorec,
+                                      const char  **focusv,
+                                      size_t        focusc,
+                                      bool          comparing,
+                                      bool          interlace);
+void         set_env_var_status(env_var_t *var);
+int          read_env_file(hash_table_t *ht,
+                           const char   *path,
+                           const char  **ignorev,
+                           size_t        ignorec,
+                           const char  **focusv,
+                           size_t        focusc,
+                           bool          comparing,
+                           bool          interlace);
+size_t       find_max_width_in_array(env_var_t **varv, size_t varc, bool name);
+size_t       trim_string(char *str);
+bool         is_numeric(const char *str);
+bool         is_interlaced(const char *str);
+void         interlace_env_vars(hash_table_t *ht, const char **keyv, size_t keyc);
+void         prepare_value_for_printing(const char *value, size_t vallen, char *buf, bool is_empty, int colwidth);
+void print_env_var(const env_var_t *var, int first_colwidth, int second_colwidth, int third_colwidth, bool comparing);
+void sort_env_vars_array(const char **keyv, size_t keyc);
+bool match_pattern(const char *str, const char *pattern);
+void print_title(const char *filename);
+int  handle_cmd(command_t *self);
+int  list(command_t *self);
+int  compare(command_t *self);
 
 //=== Main ===================================================================//
 int main(int argc, char **argv) {
     //=== Shared options =====================================================//
-    Option ignore_opt =
+    option_t ignore_opt =
         option_create_string_opt("ignore", "i", "Comma seperated list of variable name patterns to ignore", NULL, true);
-    Option key_opt =
+    option_t key_opt =
         option_create_string_opt("key", "k", "Comma seperated list of variable name patterns to focus on", NULL, true);
-    Option truncate_opt =
+    option_t truncate_opt =
         option_create_string_opt("truncate", "T", "The amount of chars to truncate keys or values to", "40", false);
+    option_t interlace_opt = option_create("interlace", "I", "Interlate env var values that refer to other env vars");
 
     //=== Compare ============================================================//
-    Command compare_cmd = command_create("cmp", "Compares two env files files.", compare);
-    Option  cmp_target_opt =
+    command_t compare_cmd = command_create("cmp", "Compares two env files files.", compare);
+    option_t  cmp_target_opt =
         option_create_string_opt("target", "t", "Path to the .env file to compare with", "./.env", false);
-    Option cmp_source_opt =
+    option_t cmp_source_opt =
         option_create_string_opt("source", "s", "Path to the .env file to compare to", "./.env.example", false);
-    Option cmp_missing_opt = option_create("missing", "m", "Show missing and empty variables");
-    Option cmp_undefined_opt =
+    option_t cmp_missing_opt = option_create("missing", "m", "Show missing and empty variables");
+    option_t cmp_undefined_opt =
         option_create("undefined", "u", "Show variables in the target that aren't in the source file");
-    Option  cmp_divergent_opt = option_create("divergent", "d", "Show variables with diverging values");
-    Option *cmp_opts[]        = {&cmp_target_opt,
-                                 &cmp_source_opt,
-                                 &ignore_opt,
-                                 &key_opt,
-                                 &truncate_opt,
-                                 &cmp_missing_opt,
-                                 &cmp_undefined_opt,
-                                 &cmp_divergent_opt};
-    compare_cmd.optv          = cmp_opts;
-    compare_cmd.optc          = ARRAY_LEN(cmp_opts);
-    const char *aliasv[]      = {"compare"};
+    option_t  cmp_divergent_opt = option_create("divergent", "d", "Show variables with diverging values");
+    option_t *cmp_opts[]        = {&cmp_target_opt,
+                                   &cmp_source_opt,
+                                   &ignore_opt,
+                                   &key_opt,
+                                   &truncate_opt,
+                                   &cmp_missing_opt,
+                                   &cmp_undefined_opt,
+                                   &cmp_divergent_opt,
+                                   &interlace_opt};
+    compare_cmd.optv            = cmp_opts;
+    compare_cmd.optc            = ARRAY_LEN(cmp_opts);
+    const char *aliasv[]        = {"compare"};
     command_set_aliases(&compare_cmd, aliasv, ARRAY_LEN(aliasv));
 
     //=== List ===============================================================//
-    Command list_cmd =
+    command_t list_cmd =
         command_create("list", "Lists all variables in the target env file, sorted alphabetically.", list);
-    Option  list_target_opt = option_create_string_opt("target", "t", "Path to the .env file", "./.env", false);
-    Option *list_optv[]     = {&list_target_opt, &ignore_opt, &key_opt, &truncate_opt};
-    list_cmd.optv           = list_optv;
-    list_cmd.optc           = ARRAY_LEN(list_optv);
+    option_t  list_target_opt = option_create_string_opt("target", "t", "Path to the .env file", "./.env", false);
+    option_t *list_optv[]     = {&list_target_opt, &ignore_opt, &key_opt, &truncate_opt, &interlace_opt};
+    list_cmd.optv             = list_optv;
+    list_cmd.optc             = ARRAY_LEN(list_optv);
 
     //=== Env Check ==========================================================//
-    Command *commands[] = {&compare_cmd, &list_cmd};
-    Program  program    = program_create(ENVC_NAME, ENVC_VERSION);
+    command_t *commands[] = {&compare_cmd, &list_cmd};
+    program_t  program    = program_create(ENVC_NAME, ENVC_VERSION);
     program_set_subcommands(&program, commands, ARRAY_LEN(commands));
     program_set_ascii_art(&program, ENVC_ASCII_ART);
 
     return run_application(&program, argc, argv);
 }
 
-//=== HT =====================================================================//
-HT ht_create(size_t cap) {
-    HT ht = HT_CREATE(HT, EnvVar *, cap, NULL, free_env_var);
+//=== hash_table_t =====================================================================//
+hash_table_t ht_create(size_t cap) {
+    hash_table_t ht = HT_CREATE(hash_table_t, env_var_t *, cap, NULL, free_env_var);
     return ht;
 }
 
-void ht_free(HT *ht) {
-    HT_FREE(HT, ht);
+void ht_free(hash_table_t *ht) {
+    HT_FREE(hash_table_t, ht);
 }
 
-EnvVar *ht_get(HT *ht, const char *key) {
-    HT_GET(HT, ht, key, NULL);
+env_var_t *ht_get(hash_table_t *hash_table_t, const char *key) {
+    HT_GET(hash_table_t, hash_table_t, key, NULL);
 }
 
-bool ht_put(HT *ht, const char *key, EnvVar *value) {
-    HT_PUT(HT, ht, key, value);
+bool ht_put(hash_table_t *hash_table_t, const char *key, env_var_t *value) {
+    HT_PUT(hash_table_t, hash_table_t, key, value);
 }
 
-void ht_keys(HT *ht, const char **buffer, size_t buffersize) {
-    HT_KEYS(HT, ht, buffer, buffersize);
+void ht_keys(hash_table_t *hash_table_t, const char **buffer, size_t buffersize) {
+    HT_KEYS(hash_table_t, hash_table_t, buffer, buffersize);
 }
 
 //=== Helpers ================================================================//
-void free_env_var(EnvVar *var) {
+void free_env_var(env_var_t *var) {
     free(var->name);
     free(var->val);
     free(var->cmpval);
@@ -191,9 +198,9 @@ bool is_numeric(const char *str) {
     return true;
 }
 
-void trim_string(char *str) {
+size_t trim_string(char *str) {
     if (str == NULL) {
-        return;
+        return 0;
     }
 
     // Trim line breaks at the end
@@ -204,9 +211,12 @@ void trim_string(char *str) {
 
     // Remove quotes if present
     if ((str[0] == '\'' && str[length - 1] == '\'') || (str[0] == '"' && str[length - 1] == '"')) {
-        memmove(str, str + 1, length - 2);
-        str[length - 2] = '\0';
+        length -= 2;
+        memmove(str, str + 1, length);
+        str[length] = '\0';
     }
+
+    return length;
 }
 
 void sort_env_vars_array(const char **keyv, size_t keyc) {
@@ -232,11 +242,11 @@ void sort_env_vars_array(const char **keyv, size_t keyc) {
     }
 }
 
-size_t find_max_width_in_array(EnvVar **varv, size_t varc, bool name) {
+size_t find_max_width_in_array(env_var_t **varv, size_t varc, bool name) {
     size_t maxlen = 0;
     for (size_t i = 0; i < varc; ++i) {
-        EnvVar *var = varv[i];
-        size_t  len = 0;
+        env_var_t *var = varv[i];
+        size_t     len = 0;
 
         if (!name && var->val != NULL) {
             len = strlen(var->val);
@@ -263,11 +273,11 @@ void prepare_value_for_printing(const char *val, size_t vallen, char *buf, bool 
     }
 }
 
-void print_env_var(const EnvVar *var, int first_colwidth, int second_colwidth, int third_colwidth, bool comparing) {
+void print_env_var(const env_var_t *var, int first_colwidth, int second_colwidth, int third_colwidth, bool comparing) {
     char *keyclr         = WHITE_BOLD;
     char *boolclr        = CYAN;
     char *numclr         = EMERALD;
-    char *strclr         = NO_COLOUR;
+    char *strclr         = NO_COLOR;
 
     bool  val_a_is_empty = str_is_empty(var->val);
     bool  val_a_is_bool =
@@ -302,7 +312,7 @@ void print_env_var(const EnvVar *var, int first_colwidth, int second_colwidth, i
     }
 
     char *status;
-    char *statusclr = NO_COLOUR;
+    char *statusclr = NO_COLOR;
 
     if (comparing) {
         switch (var->status) {
@@ -326,29 +336,30 @@ void print_env_var(const EnvVar *var, int first_colwidth, int second_colwidth, i
         }
     }
 
-    printf("  "); // leading spaces
+    writef("  "); // leading spaces
     if (comparing) {
-        printf("%s%s%s ", statusclr, status, NO_COLOUR);
+        writef("%s%s%s ", statusclr, status, NO_COLOR);
     }
-    printf("%s%-*.*s%s", keyclr, first_colwidth + 4, first_colwidth, var->name,
-           NO_COLOUR); // column 1
-    printf("%s%-*.*s%s", val_a_clr, second_colwidth + 3, second_colwidth, __val_a,
-           NO_COLOUR); // column 2
+    writef("%s%-*.*s%s", keyclr, first_colwidth + 4, first_colwidth, var->name,
+           NO_COLOR); // column 1
+    writef("%s%-*.*s%s", val_a_clr, second_colwidth + 3, second_colwidth, __val_a,
+           NO_COLOR); // column 2
     if (comparing) {
-        printf("%s%-*.*s%s", val_b_clr, third_colwidth, third_colwidth, __val_b,
-               NO_COLOUR); // column 3
+        writef("%s%-*.*s%s", val_b_clr, third_colwidth, third_colwidth, __val_b,
+               NO_COLOR); // column 3
     }
-    printf("\n"); // line break
+    writef("\n"); // line break
 }
 
-void create_env_var_from_line(HT          *ht,
-                              const char  *line,
-                              const char **ignorev,
-                              size_t       ignorec,
-                              const char **focusv,
-                              size_t       focusc,
-                              bool         comparing) {
-    assert(ht != NULL);
+void create_env_var_from_line(hash_table_t *hash_table,
+                              const char   *line,
+                              const char  **ignorev,
+                              size_t        ignorec,
+                              const char  **focusv,
+                              size_t        focusc,
+                              bool          comparing,
+                              bool          interlace) {
+    assert(hash_table != NULL);
 
     if (!line) {
         return;
@@ -401,7 +412,8 @@ void create_env_var_from_line(HT          *ht,
 
     char trimmed[vallen + 1];
     strcpy(trimmed, delimpos + 1);
-    trim_string(trimmed);
+    vallen          = trim_string(trimmed);
+    // printf("%s: %zu\n", name, vallen);
     trimmed[vallen] = '\0';
     if (!str_equals_case_insensitive(trimmed, "null") && !str_equals_case_insensitive(trimmed, "(null)")) {
         strcpy(value, trimmed);
@@ -410,12 +422,22 @@ void create_env_var_from_line(HT          *ht,
         vallen   = 0;
     }
 
-    EnvVar *var = ht_get(ht, name);
+    bool interlaces = interlace && !str_is_empty(value) && str_starts_with(value, "${") && str_ends_with(value, "}");
+    // TODO: loop over all vars after creating the HT, so we can reference values
+    // of vars that at this point might not be present yet in the HT
+    // TODO: add coloring to interlaced values when printing
+
+    env_var_t *var = ht_get(hash_table, name);
     if (var != NULL) {
         if (comparing && var->cmpval == NULL) {
             var->cmpval    = value;
             var->cmpvallen = vallen;
+
             set_env_var_status(var);
+        }
+
+        if (interlaces) {
+            var->interlaced = true;
         }
     } else {
         var = malloc(sizeof(*var));
@@ -437,20 +459,56 @@ void create_env_var_from_line(HT          *ht,
 
         strcpy(p, name);
 
-        var->cmpval    = comparing ? value : NULL;
-        var->name      = p;
-        var->namelen   = namelen;
-        var->status    = OK;
-        var->val       = comparing ? NULL : value;
-        var->vallen    = comparing ? 0 : vallen;
-        var->cmpvallen = comparing ? vallen : 0;
-        ht_put(ht, name, var);
+        var->cmpval     = comparing ? value : NULL;
+        var->name       = p;
+        var->namelen    = namelen;
+        var->status     = OK;
+        var->val        = comparing ? NULL : value;
+        var->vallen     = comparing ? 0 : vallen;
+        var->cmpvallen  = comparing ? vallen : 0;
+        var->interlaced = interlaces;
 
+        ht_put(hash_table, name, var);
         set_env_var_status(var);
     }
 }
 
-void set_env_var_status(EnvVar *var) {
+bool is_interlaced(const char *str) {
+    if (str == NULL) {
+        return false;
+    }
+    return str_starts_with(str, "${") && str_ends_with(str, "}");
+}
+
+void interlace_env_vars(hash_table_t *ht, const char **keyv, size_t keyc) {
+    for (size_t i = 0; i < keyc; ++i) {
+        const char *key = keyv[i];
+        env_var_t  *var = ht_get(ht, key);
+        if (!var || !var->interlaced) {
+            continue;
+        }
+        bool val_is_interlaced = is_interlaced(var->val);
+        if (val_is_interlaced) {
+            char buf[var->vallen];
+            str_slice(var->val, 2, var->vallen - 1, buf);
+            env_var_t *ref = ht_get(ht, buf);
+            if (ref) {
+                var->val = ref->val ? strdup(ref->val) : NULL;
+            }
+        }
+        bool cmpval_is_interlaced = is_interlaced(var->cmpval);
+        if (cmpval_is_interlaced) {
+            char buf[var->cmpvallen];
+            str_slice(var->cmpval, 2, var->cmpvallen - 1, buf);
+            env_var_t *ref = ht_get(ht, buf);
+            if (ref) {
+                var->cmpval = ref->cmpval ? strdup(ref->cmpval) : NULL;
+            }
+        }
+    }
+}
+
+void set_env_var_status(env_var_t *var) {
     bool val_is_empty    = str_is_empty(var->val);
     bool cmpval_is_empty = str_is_empty(var->cmpval);
 
@@ -476,15 +534,16 @@ void set_env_var_status(EnvVar *var) {
     var->status = OK;
 }
 
-int read_env_file(HT          *ht,
-                  const char  *path,
-                  const char **ignorev,
-                  size_t       ignorec,
-                  const char **focusv,
-                  size_t       focusc,
-                  bool         comparing) {
-    assert(ht != NULL);
-    // assert(path != NULL);
+int read_env_file(hash_table_t *hash_table_t,
+                  const char   *path,
+                  const char  **ignorev,
+                  size_t        ignorec,
+                  const char  **focusv,
+                  size_t        focusc,
+                  bool          comparing,
+                  bool          interlace) {
+    assert(hash_table_t != NULL);
+    assert(path != NULL);
 
     if (!file_exists(path)) {
         panicf("File '%s' does not exist", path);
@@ -508,7 +567,7 @@ int read_env_file(HT          *ht,
     }
 
     while ((read = getline(&buffer, &len, file)) != -1) {
-        create_env_var_from_line(ht, buffer, ignorev, ignorec, focusv, focusc, comparing);
+        create_env_var_from_line(hash_table_t, buffer, ignorev, ignorec, focusv, focusc, comparing, interlace);
     }
 
     fclose(file);
@@ -551,13 +610,13 @@ void print_title(const char *filename) {
     underline[pathlen] = '\0';
 
     // print title and underline
-    char *titleclr = NO_COLOUR;
-    pcolorf(titleclr, "%s\n", filename);
-    pcolorf(titleclr, "%s\n", underline);
+    char *titleclr = NO_COLOR;
+    pcolorlnf(titleclr, "%s", filename);
+    pcolorlnf(titleclr, "%s", underline);
 }
 
-//=== Command impl ===========================================================//
-int handle_cmd(Command *self) {
+//=== command_t impl ===========================================================//
+int handle_cmd(command_t *self) {
     char *target       = get_string_opt(self, "target");
     char *source       = get_string_opt(self, "source");
     char *ignore       = get_string_opt(self, "ignore");
@@ -566,10 +625,11 @@ int handle_cmd(Command *self) {
     bool  missing      = get_bool_opt(self, "missing");
     bool  undefined    = get_bool_opt(self, "undefined");
     bool  divergent    = get_bool_opt(self, "divergent");
+    bool  interlace    = get_bool_opt(self, "interlace");
 
     int   truncate_val = truncate ? atoi(truncate) : 0;
     if (truncate_val > 0) {
-        truncate_val = max(truncate_val, 4);
+        truncate_val = max(truncate_val, 7);
     }
     bool   selective = missing || undefined || divergent;
     bool   comparing = source != NULL;
@@ -582,17 +642,25 @@ int handle_cmd(Command *self) {
     char  *focusv[focusc];
     str_split_by_delim(key, ',', focusv, focusc);
 
-    HT ht = ht_create(50);
+    hash_table_t ht = ht_create(50);
 
     if (comparing &&
-        read_env_file(&ht, source, (const char **) ignorev, ignorec, (const char **) focusv, focusc, false) > 0) {
+        read_env_file(&ht, source, (const char **) ignorev, ignorec, (const char **) focusv, focusc, false, interlace) >
+            0) {
         free_strings(ignorev, ignorec);
         free_strings(focusv, focusc);
         ht_free(&ht);
         return EXIT_FAILURE;
     }
 
-    if (read_env_file(&ht, target, (const char **) ignorev, ignorec, (const char **) focusv, focusc, comparing) > 0) {
+    if (read_env_file(&ht,
+                      target,
+                      (const char **) ignorev,
+                      ignorec,
+                      (const char **) focusv,
+                      focusc,
+                      comparing,
+                      interlace) > 0) {
         free_strings(ignorev, ignorec);
         free_strings(focusv, focusc);
         ht_free(&ht);
@@ -607,6 +675,10 @@ int handle_cmd(Command *self) {
     ht_keys(&ht, keys, vars);
     sort_env_vars_array(keys, vars);
 
+    if (interlace) {
+        interlace_env_vars(&ht, keys, vars);
+    }
+
     if (comparing) {
         char title[FILENAME_MAX];
         sprintf(title, "Comparing '%s' to '%s'", source, target);
@@ -620,8 +692,8 @@ int handle_cmd(Command *self) {
     size_t third_colwidth  = 7;
 
     for (size_t i = 0; i < vars; ++i) {
-        EnvVar *var          = ht_get(&ht, keys[i]);
-        bool    should_print = !selective || (var->status == MISSING && missing) ||
+        env_var_t *var          = ht_get(&ht, keys[i]);
+        bool       should_print = !selective || (var->status == MISSING && missing) ||
                             (var->status == UNDEFINED && undefined) || (var->status == DIVERGENT && divergent);
 
         if (!should_print) {
@@ -634,14 +706,13 @@ int handle_cmd(Command *self) {
     }
 
     if (truncate_val > 0) {
-        first_colwidth  = min((int) first_colwidth, truncate_val);
         second_colwidth = min((int) second_colwidth, truncate_val);
         third_colwidth  = min((int) third_colwidth, truncate_val);
     }
 
     for (size_t i = 0; i < vars; ++i) {
-        EnvVar *var          = ht_get(&ht, keys[i]);
-        bool    should_print = !selective || (var->status == MISSING && missing) ||
+        env_var_t *var          = ht_get(&ht, keys[i]);
+        bool       should_print = !selective || (var->status == MISSING && missing) ||
                             (var->status == UNDEFINED && undefined) || (var->status == DIVERGENT && divergent);
 
         if (should_print) {
@@ -655,11 +726,11 @@ int handle_cmd(Command *self) {
 }
 
 //=== List ===================================================================//
-int list(Command *self) {
+int list(command_t *self) {
     return handle_cmd(self);
 }
 
 //=== Compare ================================================================//
-int compare(Command *self) {
+int compare(command_t *self) {
     return handle_cmd(self);
 }

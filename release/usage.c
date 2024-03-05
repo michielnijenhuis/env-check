@@ -10,59 +10,59 @@
 #include <stdio.h>
 #include <usage.h>
 
-int usage(Program *program, bool version_only) {
+int usage(program_t *program, bool version_only) {
     if (program->art) {
-        printf("%s\n", program->art);
+        writeln(program->art);
     }
 
     pcolorf(GREEN, "%s", program->name);
     if (program->version != NULL) {
-        printf(" version %s%s%s", COLOR(YELLOW), program->version, NO_COLOUR);
+        writef(" version %s%s%s", COLOR(YELLOW), program->version, NO_COLOR);
     }
-    printf("\n");
+    new_line();
 
     if (version_only) {
         return 1;
     }
 
-    printf("\n");
-    pcolor(YELLOW, "Usage:");
-    printf("  command [options] [arguments]\n");
+    new_line();
+    pcolorln(YELLOW, "Usage:");
+    writeln("  command [options] [arguments]");
 
     int width = max(option_get_print_width(program->optv, program->optc),
                     command_get_print_width(program->cmdv, program->cmdc));
 
-    printf("\n");
-    pcolor(YELLOW, "Options:");
+    new_line();
+    pcolorln(YELLOW, "Options:");
     option_print_all(program->optv, program->optc, width);
 
-    printf("\n");
-    pcolor(YELLOW, "Available commands:");
+    new_line();
+    pcolorln(YELLOW, "Available commands:");
     command_print_all(program->cmdv, program->cmdc, width);
 
     return 1;
 }
 
-int usage_cmd(Command *cmd) {
-    pcolor(YELLOW, "Description:");
-    printf("  %s\n", cmd->desc);
+int usage_cmd(command_t *cmd) {
+    pcolorln(YELLOW, "Description:");
+    writelnf("  %s", cmd->desc);
 
-    printf("\n");
-    pcolor(YELLOW, "Usage:");
-    printf("  ");
-    printf("%s [options]", cmd->name);
+    new_line();
+    pcolorln(YELLOW, "Usage:");
+    writef("  ");
+    writef("%s [options]", cmd->name);
 
     if (cmd->argc > 0) {
-        printf(" [--] ");
+        writef(" [--] ");
 
         bool has_required_args = argument_is_required(cmd->argv[0]);
 
         if (!has_required_args) {
-            printf("[");
+            writef("[");
         }
 
         for (size_t i = 0; i < cmd->argc; ++i) {
-            Argument *arg = cmd->argv[i];
+            argument_t *arg = cmd->argv[i];
             assert(arg != NULL);
             assert(arg->name != NULL);
 
@@ -71,26 +71,26 @@ int usage_cmd(Command *cmd) {
 
             if (required && multi && arg->min_count > 1) {
                 for (size_t j = 0; j < arg->min_count - 1; ++j) {
-                    printf("<%s> ", arg->name);
+                    writef("<%s> ", arg->name);
                 }
             }
 
-            printf("%s<%s>%s", !required && i > 0 ? "[" : "", cmd->argv[i]->name, !required && i > 0 ? "]" : "");
+            writef("%s<%s>%s", !required && i > 0 ? "[" : "", cmd->argv[i]->name, !required && i > 0 ? "]" : "");
 
             if (multi) {
-                printf("...");
+                writef("...");
             }
         }
 
         if (!has_required_args) {
-            printf("]");
+            writef("]");
         }
     }
-    printf("\n");
+    new_line();
 
     if (cmd->aliasv) {
         for (size_t i = 0; i < cmd->aliasc; ++i) {
-            printf("  %s\n", cmd->aliasv[i]);
+            writelnf("  %s", cmd->aliasv[i]);
         }
     }
 
@@ -98,47 +98,47 @@ int usage_cmd(Command *cmd) {
     int argwidth = argument_get_print_width(cmd->argv, cmd->argc);
     int width    = max(optwidth, argwidth);
 
-    printf("\n");
-    pcolor(YELLOW, "Options:");
+    new_line();
+    pcolorln(YELLOW, "Options:");
     if (cmd->optc > 0) {
         option_print_all(cmd->optv, cmd->optc, width);
     }
 
     if (cmd->argv != NULL) {
-        printf("\n");
-        pcolor(YELLOW, "Arguments:");
+        new_line();
+        pcolorln(YELLOW, "Arguments:");
         argument_print_all(cmd->argv, cmd->argc, width);
     }
 
     if (cmd->info) {
-        printf("\n");
-        pcolor(YELLOW, "Help:");
-        printf("  %s\n", cmd->info);
+        new_line();
+        pcolorln(YELLOW, "Help:");
+        writelnf("  %s", cmd->info);
     }
 
     return 1;
 }
 
-int usage_string_cmd(const char *name, Option **optv, size_t optc, Argument **argv, size_t argc) {
-    if (should_be_quiet()) {
+int usage_string_cmd(const char *name, option_t **optv, size_t optc, argument_t **argv, size_t argc) {
+    if (is_quiet()) {
         return 1;
     }
 
-    printf(COLOR(GREEN));
-    printf("%s", name);
+    writef(GREEN);
+    writef("%s", name);
 
     for (size_t i = 0; i < optc; ++i) {
         option_print_tag(optv[i]);
     }
 
     if (argc > 0) {
-        printf(" [--]");
+        writef(" [--]");
         for (size_t i = 0; i < argc; ++i) {
             argument_print_tag(argv[i]);
         }
     }
 
-    printf("%s\n", NO_COLOUR);
+    writef("%s\n", NO_COLOR);
 
     return 1;
 }

@@ -1,199 +1,317 @@
+#include "output.h"
+
 #include <assert.h>
+#include <colors.h>
 #include <math-utils.h>
 #include <output.h>
 #include <stdlib.h>
 #include <string.h>
 
-static void vlog(FILE *stream, const char *color, const char *tag, const char *fmt, va_list args);
-static void vlog_padded(FILE *stream, const char *color, const char *msg);
+// TODO: wrap lines -> print up to max line length
 
-static void vlog(FILE *stream, const char *color, const char *tag, const char *fmt, va_list args) {
-    fprintf(stream, "%s%s%s", color, tag, NO_COLOUR);
-    vfprintf(stream, fmt, args);
-    fprintf(stream, "\n");
+static const char     *error_prefix   = "[ERROR] ";
+static const char     *error_color    = __RED_BG_WHITE_TEXT;
+static const char     *warning_prefix = "[WARNING] ";
+static const char     *warning_color  = __BG_YELLOW_BLACK_TEXT;
+static const char     *info_prefix    = "[INFO] ";
+static const char     *info_color     = __BG_BLUE_WHITE_TEXT;
+static const char     *success_prefix = "[OK] ";
+static const char     *success_color  = __BG_GREEN_WHITE_TEXT;
+static const char     *debug_prefix   = NULL;
+static const char     *debug_color    = NO_COLOR;
+
+static output_style_t  _style;
+static output_style_t *style     = &_style;
+static log_level_t     log_level = LOG_LEVEL_ERROR;
+
+static FILE           *get_stream(log_level_t level);
+static void            set_default_style(void) __attribute__((constructor));
+static void            write_padded(FILE *stream, const char *color, const char *prefix, const char *str);
+static const char     *get_color(log_level_t level);
+static const char     *get_prefix(log_level_t level);
+
+// ----------------------------------------------------------------
+
+static FILE *get_stream(log_level_t level) {
+    if (log_level < level) {
+        return NULL;
+    }
+
+    switch (log_level) {
+        case LOG_LEVEL_QUIET:
+            return NULL;
+        case LOG_LEVEL_ERROR:
+        case LOG_LEVEL_WARNING:
+        case LOG_LEVEL_CAUTION:
+        case LOG_LEVEL_DEBUG:
+            return stderr;
+        case LOG_LEVEL_SUCCESS:
+        case LOG_LEVEL_INFO:
+            return stdout;
+    }
 }
 
-void print(const char *fmt, ...) {
-    assert(fmt != NULL);
-    if (should_be_quiet()) {
-        return;
-    }
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(stderr, fmt, args);
-    va_end(args);
+static void set_default_style(void) {
+    set_error_prefix(error_prefix);
+    set_error_color(error_color);
+    set_warning_prefix(warning_prefix);
+    set_warning_color(warning_color);
+    set_info_prefix(info_prefix);
+    set_info_color(info_color);
+    set_success_prefix(success_prefix);
+    set_success_color(success_color);
+    set_debug_prefix(debug_prefix);
+    set_debug_color(debug_color);
 }
 
-void loginfo(const char *fmt, ...) {
-    assert(fmt != NULL);
-    if (!can_print(LOG_LEVEL_INFO)) {
-        return;
-    }
-    va_list args;
-    va_start(args, fmt);
-    vlog(stderr, INFO_LOG_COLOR, INFO_PREFIX, fmt, args);
-    va_end(args);
+void set_error_prefix(const char *prefix) {
+    style->error_prefix = prefix;
 }
 
-void logwarn(const char *restrict fmt, ...) {
-    assert(fmt != NULL);
-    if (!can_print(LOG_LEVEL_WARNING)) {
-        return;
-    }
-    va_list args;
-    va_start(args, fmt);
-    vlog(stderr, WARNING_LOG_COLOR, WARNING_PREFIX, fmt, args);
-    va_end(args);
+void set_error_color(const char *color) {
+    style->error_color = color;
 }
 
-void logerro(const char *fmt, ...) {
-    assert(fmt != NULL);
-    if (!can_print(LOG_LEVEL_ERROR)) {
-        return;
-    }
-    va_list args;
-    va_start(args, fmt);
-    vlog(stderr, ERROR_LOG_COLOR, ERROR_PREFIX, fmt, args);
-    va_end(args);
+void set_warning_prefix(const char *prefix) {
+    style->warning_prefix = prefix;
 }
 
-void logdebug(const char *restrict fmt, ...) {
-    assert(fmt != NULL);
-    if (!can_print(LOG_LEVEL_DEBUG)) {
-        return;
-    }
-    va_list args;
-    va_start(args, fmt);
-    vlog(stderr, DEBUG_LOG_COLOR, DEBUG_PREFIX, fmt, args);
-    va_end(args);
+void set_warning_color(const char *color) {
+    style->warning_color = color;
 }
 
-void info(const char *msg) {
-    if (!msg || !can_print(LOG_LEVEL_INFO)) {
-        return;
-    }
-    vlog_padded(stderr, INFO_COLOR, msg);
+void set_success_prefix(const char *prefix) {
+    style->success_prefix = prefix;
 }
 
-void erro(const char *msg) {
-    if (!msg || !can_print(LOG_LEVEL_ERROR)) {
-        return;
-    }
-    vlog_padded(stderr, ERROR_COLOR, msg);
+void set_success_color(const char *color) {
+    style->success_color = color;
 }
 
-void warn(const char *msg) {
-    if (!msg || !can_print(LOG_LEVEL_WARNING)) {
-        return;
-    }
-    vlog_padded(stderr, WARNING_COLOR, msg);
+void set_info_prefix(const char *prefix) {
+    style->info_prefix = prefix;
 }
 
-void debug(const char *msg) {
-    if (!msg || !can_print(LOG_LEVEL_DEBUG)) {
-        return;
-    }
-    vlog_padded(stderr, DEBUG_COLOR, msg);
+void set_info_color(const char *color) {
+    style->info_color = color;
 }
 
-void panic(const char *msg) {
-    if (!msg || !can_print(LOG_LEVEL_ERROR)) {
-        return;
+void set_debug_prefix(const char *prefix) {
+    style->debug_prefix = prefix;
+}
+
+void set_debug_color(const char *color) {
+    style->debug_color = color;
+}
+
+void set_output_style(output_style_t *s) {
+    style = s;
+}
+
+output_style_t *get_output_style(void) {
+    return style;
+}
+
+static const char *get_color(log_level_t level) {
+    output_style_t *style = get_output_style();
+    assert(style != NULL);
+    switch (level) {
+        case LOG_LEVEL_ERROR:
+            return style->error_color;
+        case LOG_LEVEL_WARNING:
+            return style->warning_color;
+        case LOG_LEVEL_CAUTION:
+            return style->warning_color;
+        case LOG_LEVEL_SUCCESS:
+            return style->success_color;
+        case LOG_LEVEL_INFO:
+            return style->info_color;
+        case LOG_LEVEL_DEBUG:
+            return style->debug_color;
+        case LOG_LEVEL_QUIET:
+        default:
+            return NULL;
     }
-    vlog_padded(stderr, ERROR_COLOR, msg);
+}
+
+static const char *get_prefix(log_level_t level) {
+    output_style_t *style = get_output_style();
+    assert(style != NULL);
+    switch (level) {
+        case LOG_LEVEL_ERROR:
+            return style->error_prefix;
+        case LOG_LEVEL_WARNING:
+            return style->warning_prefix;
+        case LOG_LEVEL_CAUTION:
+            return style->warning_prefix;
+        case LOG_LEVEL_SUCCESS:
+            return style->success_prefix;
+        case LOG_LEVEL_INFO:
+            return style->info_prefix;
+        case LOG_LEVEL_DEBUG:
+            return style->debug_prefix;
+        case LOG_LEVEL_QUIET:
+        default:
+            return NULL;
+    }
+}
+
+#define __log(msg, level)                                                                                              \
+    if (!msg) {                                                                                                        \
+        return;                                                                                                        \
+    }                                                                                                                  \
+    FILE *stream = get_stream(level);                                                                                  \
+    if (!stream) {                                                                                                     \
+        return;                                                                                                        \
+    }                                                                                                                  \
+    const char *prefix = get_prefix(level);                                                                            \
+    const char *color  = get_color(level);                                                                             \
+    if (prefix) {                                                                                                      \
+        write_padded(stream, color, prefix, msg);                                                                      \
+    } else {                                                                                                           \
+        fprintf(stream, "%s\n", msg);                                                                                  \
+    }
+
+void erro(const char *str) {
+    __log(str, LOG_LEVEL_ERROR);
+}
+
+void panic(const char *str) {
+    erro(str);
     exit(1);
 }
 
-void infof(const char *fmt, ...) {
-    if (!fmt || !can_print(LOG_LEVEL_INFO)) {
+void caution(const char *str) {
+    __log(str, LOG_LEVEL_CAUTION);
+}
+
+void warn(const char *str) {
+    __log(str, LOG_LEVEL_WARNING);
+}
+
+void info(const char *str) {
+    __log(str, LOG_LEVEL_INFO);
+}
+
+void success(const char *str) {
+    __log(str, LOG_LEVEL_SUCCESS);
+}
+
+void debug(const char *str) {
+    __log(str, LOG_LEVEL_DEBUG);
+}
+
+// TODO: implement
+static void wrapln(FILE *stream, const char *str) {
+    fprintf(stream, "%s\n", str);
+    // size_t len = strlen(str);
+    // if (len <= OUTPUT_MAX_LINE_LEN) {
+    //     fprintf(stream, "%s\n", str);
+    //     return;
+    // }
+    // ssize_t remaining = len;
+    // char *p = (char *) str;
+    // while (remaining > 0) {
+    //     fprintf(stream, "%.*s\n", OUTPUT_MAX_LINE_LEN, p);
+    //     if (remaining > OUTPUT_MAX_LINE_LEN) {
+    //         p += OUTPUT_MAX_LINE_LEN;
+    //     }
+    //     remaining -= OUTPUT_MAX_LINE_LEN;
+    // }
+}
+
+void writeln(const char *str) {
+    if (!str) {
         return;
     }
+    FILE *stream = get_stream(LOG_LEVEL_ERROR);
+    if (!stream) {
+        return;
+    }
+    wrapln(stream, str);
+}
+
+void writelnf(const char *fmt, ...) {
+    if (!fmt) {
+        return;
+    }
+    FILE *stream = get_stream(LOG_LEVEL_ERROR);
+    if (!stream) {
+        return;
+    }
+    char    buf[1024];
+    char   *p = buf;
     va_list args;
     va_start(args, fmt);
-    char err[1024];
-    vsprintf(err, fmt, args);
-    vlog_padded(stderr, INFO_COLOR, err);
+    vsprintf(p, fmt, args);
     va_end(args);
+    wrapln(stream, p);
 }
+
+#define __logf(level, fmt, ...)                                                                                        \
+    if (!fmt) {                                                                                                        \
+        return;                                                                                                        \
+    }                                                                                                                  \
+    FILE *stream = get_stream(level);                                                                                  \
+    if (!stream) {                                                                                                     \
+        return;                                                                                                        \
+    }                                                                                                                  \
+    const char *prefix = get_prefix(level);                                                                            \
+    const char *color  = get_color(level);                                                                             \
+    char        buffer[1024];                                                                                          \
+    va_list     args;                                                                                                  \
+    va_start(args, fmt);                                                                                               \
+    vsprintf(buffer, fmt, args);                                                                                       \
+    va_end(args);                                                                                                      \
+    if (prefix) {                                                                                                      \
+        write_padded(stream, color, prefix, buffer);                                                                   \
+    } else {                                                                                                           \
+        fprintf(stream, "%s\n", buffer);                                                                               \
+    }
 
 void errof(const char *fmt, ...) {
-    assert(fmt != NULL);
-    if (!can_print(LOG_LEVEL_ERROR)) {
-        return;
-    }
-    va_list args;
-    va_start(args, fmt);
-    char err[1024];
-    vsprintf(err, fmt, args);
-    vlog_padded(stderr, ERROR_COLOR, err);
-    va_end(args);
-}
-
-void warnf(const char *fmt, ...) {
-    assert(fmt != NULL);
-    if (!can_print(LOG_LEVEL_WARNING)) {
-        return;
-    }
-    va_list args;
-    va_start(args, fmt);
-    char err[1024];
-    vsprintf(err, fmt, args);
-    vlog_padded(stderr, WARNING_COLOR, err);
-    va_end(args);
-}
-
-void debugf(const char *fmt, ...) {
-    assert(fmt != NULL);
-    if (!can_print(LOG_LEVEL_DEBUG)) {
-        return;
-    }
-    va_list args;
-    va_start(args, fmt);
-    char err[1024];
-    vsprintf(err, fmt, args);
-    vlog_padded(stderr, DEBUG_COLOR, err);
-    va_end(args);
+    __logf(LOG_LEVEL_ERROR, fmt);
 }
 
 void panicf(const char *fmt, ...) {
-    assert(fmt != NULL);
-    if (!can_print(LOG_LEVEL_ERROR)) {
-        return;
-    }
-    va_list args;
-    va_start(args, fmt);
-    char err[1024];
-    vsprintf(err, fmt, args);
-    vlog_padded(stderr, ERROR_COLOR, err);
-    va_end(args);
+    __logf(LOG_LEVEL_ERROR, fmt);
     exit(1);
 }
 
-void set_log_level(LogLevel level) {
-    LOG_LEVEL = level;
+void warnf(const char *fmt, ...) {
+    __logf(LOG_LEVEL_WARNING, fmt);
 }
 
-void writeln(const char *format, ...) {
-    assert(format != NULL);
-    if (!can_print(LOG_LEVEL_ERROR)) {
-        return;
-    }
-    va_list args;
-    va_start(args, format);
-    vprintf(format, args);
-    va_end(args);
-    new_line();
+void cautionf(const char *fmt, ...) {
+    __logf(LOG_LEVEL_CAUTION, fmt);
 }
 
-static void vlog_padded(FILE *stream, const char *color, const char *msg) {
-    if (should_be_quiet()) {
+void successf(const char *fmt, ...) {
+    __logf(LOG_LEVEL_SUCCESS, fmt);
+}
+
+void infof(const char *fmt, ...) {
+    __logf(LOG_LEVEL_INFO, fmt);
+}
+
+void debugf(const char *fmt, ...) {
+    __logf(LOG_LEVEL_DEBUG, fmt);
+}
+
+void set_log_level(log_level_t level) {
+    log_level = level;
+}
+
+static void write_padded(FILE *stream, const char *color, const char *prefix, const char *str) {
+    if (!stream || !str) {
         return;
     }
 
-    char *copy = strdup(msg);
+    char *copy = strdup(str);
     assert(copy != NULL);
 
-    int          padding      = PADDING;
+    int          padding      = 4;
+    int          prefix_len   = strlen(prefix);
     int          color_len    = strlen(color);
     unsigned int max_line_len = 0;
     unsigned int lines        = 0;
@@ -206,44 +324,58 @@ static void vlog_padded(FILE *stream, const char *color, const char *msg) {
         token = strtok(NULL, "\n");
     }
 
+    int width = color_len + prefix_len + padding + max_line_len;
     new_line();
-    int width = max_line_len + padding + color_len;
     fprintf(stream, "%s", color);
-    fprintf(stream, "%-*.*s%s\n", width, width, color, NO_COLOUR);
+    fprintf(stream, "%-*.*s%s\n", width, width, color, NO_COLOR);
 
     free(copy);
-    copy = strdup(msg);
+    copy = strdup(str);
     assert(copy != NULL);
     token = strtok(copy, "\n");
     while (token != NULL) {
         fprintf(stream,
-                "%s%-*s%-*.*s%s\n",
+                "%s%-*s%s%-*.*s%s\n",
                 color,
                 padding / 2,
                 "",
+                prefix,
                 (int) max_line_len + (padding / 2),
                 width,
                 token,
-                NO_COLOUR);
+                NO_COLOR);
         token = strtok(NULL, "\n");
     }
     free(copy);
     copy = NULL;
 
-    fprintf(stream, "%-*.*s%s\n", width, width, color, NO_COLOUR);
-    fprintf(stream, NO_COLOUR);
+    fprintf(stream, "%-*.*s%s\n", width, width, color, NO_COLOR);
+    fprintf(stream, NO_COLOR);
 }
 
 void new_line(void) {
-    if (!should_be_quiet()) {
-        printf("\n");
+    FILE *stream = get_stream(LOG_LEVEL_ERROR);
+    if (stream) {
+        fprintf(stream, "\n");
     }
 }
 
-bool can_print(LogLevel logLevel) {
-    return logLevel <= LOG_LEVEL;
+log_level_t get_log_level(void) {
+    return log_level;
 }
 
-bool should_be_quiet(void) {
-    return LOG_LEVEL == LOG_LEVEL_QUIET;
+bool is_quiet(void) {
+    log_level_t level = get_log_level();
+    return level == LOG_LEVEL_QUIET;
+}
+
+void writef(const char *fmt, ...) {
+    FILE *stream = get_stream(LOG_LEVEL_ERROR);
+    if (!stream) {
+        return;
+    }
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stream, fmt, args);
+    va_end(args);
 }

@@ -8,7 +8,7 @@
 # define CLIDEF
 #endif // CLIDEF
 
-int run_application(Program *program, int argc, char **argv);
-int run_command(Command *cmd, int argc, char **argv);
+int run_application(program_t *program, int argc, char **argv);
+int run_command(command_t *cmd, int argc, char **argv);
 
 #endif // CLI_H

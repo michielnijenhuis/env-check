@@ -3,23 +3,23 @@
 
 #include <command.h>
 
-typedef struct Program {
-    const char *name;
-    const char *version;
-    Command   **cmdv;
-    size_t      cmdc;
-    Option    **optv;
-    size_t      optc;
-    Argument  **argv;
-    size_t      argc;
-    const char *art;
-} Program;
+typedef struct program_t {
+    const char  *name;
+    const char  *version;
+    command_t  **cmdv;
+    size_t       cmdc;
+    option_t   **optv;
+    size_t       optc;
+    argument_t **argv;
+    size_t       argc;
+    const char  *art;
+} program_t;
 
-void    program_init(Program *program, const char *name, const char *version);
-Program program_create(const char *name, const char *version);
-void    program_set_subcommands(Program *program, Command **cmdv, size_t cmdc);
-void    program_set_opts(Program *program, Option **optv, size_t optc);
-void    program_set_args(Program *program, Argument **argv, size_t argc);
-void    program_set_ascii_art(Program *program, const char *art);
+void      program_init(program_t *program, const char *name, const char *version);
+program_t program_create(const char *name, const char *version);
+void      program_set_subcommands(program_t *program, command_t **cmdv, size_t cmdc);
+void      program_set_opts(program_t *program, option_t **optv, size_t optc);
+void      program_set_args(program_t *program, argument_t **argv, size_t argc);
+void      program_set_ascii_art(program_t *program, const char *art);
 
 #endif // PROGRAM_H

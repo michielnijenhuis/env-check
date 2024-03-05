@@ -34,7 +34,6 @@ for LIB in "${LIBS[@]}"; do
 done
 
 for LIB in "${LIBS[@]}"; do
-    # FILE="/usr/local/lib/lib$LIB.dylib"
     FILE="/Users/michielnijenhuis/Code/c-libs/src/$LIB.c"
 
     if [ -f "$FILE" ]; then
@@ -53,13 +52,17 @@ printf "#!/bin/bash\n\n" > $BUILD_SCRIPT
     printf "set -x\n\n";
 } >> $BUILD_SCRIPT
 
-printf "\$CMD -DENVC_VERSION=%s%s%s -o ./envc main.c -L." '\"' "$VERSION" '\"' >> "$BUILD_SCRIPT"
+printf "\$CMD -DENVC_VERSION=%s%s%s -I. -o ./envc main.c" '\"' "$VERSION" '\"' >> "$BUILD_SCRIPT"
 for LIB in "${LIBS[@]}"; do
     if [ -f "release/$LIB.c" ]; then
-        printf " -l%s" "$LIB" >> "$BUILD_SCRIPT"
+        printf " %s.c" "$LIB" >> "$BUILD_SCRIPT"
     fi
 done
-printf "\n\n" >> "$BUILD_SCRIPT"
+{
+    printf "\n\n"
+    printf "sudo cp ./envc /usr/local/bin"
+    printf "\n\n"
+} >> "$BUILD_SCRIPT"
 
 cp "src/main.c" "release/main.c"
 
