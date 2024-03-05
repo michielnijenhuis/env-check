@@ -1,4 +1,5 @@
 #include "colors.h"
+
 #include <argument.h>
 #include <assert.h>
 #include <colors.h>
@@ -8,7 +9,7 @@
 #include <stddef.h>
 #include <string.h>
 
-void argument_init(Argument *arg, const char *name, const char *desc) {
+void argument_init(argument_t *arg, const char *name, const char *desc) {
     assert(arg != NULL);
     assert(name != NULL);
 
@@ -21,36 +22,36 @@ void argument_init(Argument *arg, const char *name, const char *desc) {
     arg->flag      = ARGUMENT_OPTIONAL;
 }
 
-void argument_set_flag(Argument *arg, int flag) {
+void argument_set_flag(argument_t *arg, int flag) {
     if (arg) {
         arg->flag = flag;
     }
 }
 
-void argument_add_flag(Argument *arg, int flag) {
+void argument_add_flag(argument_t *arg, int flag) {
     if (arg) {
         arg->flag |= flag;
     }
 }
 
-char *argument_get(Argument **argv, size_t argc, const char *name) {
-    Argument *arg = argument_find(argv, argc, name);
+char *argument_get(argument_t **argv, size_t argc, const char *name) {
+    argument_t *arg = argument_find(argv, argc, name);
     return arg ? arg->value : NULL;
 }
 
-Argument argument_create(const char *name, const char *desc) {
-    Argument arg;
+argument_t argument_create(const char *name, const char *desc) {
+    argument_t arg;
     argument_init(&arg, name, desc);
     return arg;
 }
 
-int argument_index_of(Argument **argv, size_t argc, const char *name) {
+int argument_index_of(argument_t **argv, size_t argc, const char *name) {
     if (!argv || !name) {
         return -1;
     }
 
     for (size_t i = 0; i < argc; ++i) {
-        Argument *arg = argv[i];
+        argument_t *arg = argv[i];
 
         if (arg && name && str_equals_case_insensitive(arg->name, name)) {
             return i;
@@ -60,49 +61,49 @@ int argument_index_of(Argument **argv, size_t argc, const char *name) {
     return -1;
 }
 
-Argument *argument_find(Argument **argv, size_t argc, const char *name) {
+argument_t *argument_find(argument_t **argv, size_t argc, const char *name) {
     int i = argument_index_of(argv, argc, name);
     return i == -1 ? NULL : argv[i];
 }
 
-void argument_print_tag(Argument *arg) {
+void argument_print_tag(argument_t *arg) {
     assert(arg != NULL);
     assert(arg->name != NULL);
     bool optional = argument_is_optional(arg);
     bool multi    = argument_is_array(arg);
-    printf(" ");
+    writef(" ");
     if (optional) {
-        printf("[");
+        writef("[");
     }
-    printf("<%s>", arg->name);
+    writef("<%s>", arg->name);
     if (multi) {
-        printf("...");
+        writef("...");
     }
     if (optional) {
-        printf("]");
+        writef("]");
     }
 }
 
-void argument_print(Argument *arg, int width) {
+void argument_print(argument_t *arg, int width) {
     assert(arg != NULL);
 
     pcolorf(GREEN, "  %-*s", width + 2, arg->name);
-    printf("%s", arg->desc);
+    writef("%s", arg->desc);
 
     if (argument_is_optional(arg) && arg->value) {
-        printf("%s [default: %s]%s", YELLOW, arg->value, NO_COLOUR);
+        writef("%s [default: %s]%s", YELLOW, arg->value, NO_COLOR);
     }
 
-    printf("\n");
+    writef("\n");
 }
 
-void argument_print_all(Argument **argv, size_t argc, int width) {
+void argument_print_all(argument_t **argv, size_t argc, int width) {
     for (size_t i = 0; i < argc; ++i) {
         argument_print(argv[i], width);
     }
 }
 
-int argument_get_print_width(Argument **argv, size_t argc) {
+int argument_get_print_width(argument_t **argv, size_t argc) {
     int width = 0;
     for (size_t i = 0; i < argc; ++i) {
         width = max(width, (int) strlen(argv[i]->name));
@@ -110,7 +111,7 @@ int argument_get_print_width(Argument **argv, size_t argc) {
     return width;
 }
 
-void argument_validate_order(Argument **argv, size_t argc) {
+void argument_validate_order(argument_t **argv, size_t argc) {
     if (argc > 0) {
         assert(argv != NULL);
     }
@@ -118,7 +119,7 @@ void argument_validate_order(Argument **argv, size_t argc) {
     int state = ARGUMENT_REQUIRED;
 
     for (size_t i = 0; i < argc; ++i) {
-        Argument *arg = argv[i];
+        argument_t *arg = argv[i];
 
         // array type argument that is not last
         if (argument_is_array(arg)) {
@@ -138,33 +139,33 @@ void argument_validate_order(Argument **argv, size_t argc) {
     }
 }
 
-bool argument_is_required(Argument *arg) {
+bool argument_is_required(argument_t *arg) {
     assert(arg != NULL);
     return arg->flag & ARGUMENT_REQUIRED;
 }
 
-bool argument_is_optional(Argument *arg) {
+bool argument_is_optional(argument_t *arg) {
     return !argument_is_required(arg);
 }
 
-bool argument_is_array(Argument *arg) {
+bool argument_is_array(argument_t *arg) {
     assert(arg != NULL);
     return arg->flag & ARGUMENT_ARRAY;
 }
 
-void argument_make_required(Argument *arg) {
+void argument_make_required(argument_t *arg) {
     if (arg) {
         argument_set_flag(arg, ARGUMENT_REQUIRED);
     }
 }
 
-void argument_set_default_value(Argument *arg, char *val) {
+void argument_set_default_value(argument_t *arg, char *val) {
     if (arg) {
         arg->value = val;
     }
 }
 
-void argument_make_array(Argument *arg, size_t min) {
+void argument_make_array(argument_t *arg, size_t min) {
     if (arg) {
         argument_set_flag(arg, ARGUMENT_ARRAY);
         argument_add_flag(arg, min > 0 ? ARGUMENT_REQUIRED : ARGUMENT_OPTIONAL);

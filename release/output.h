@@ -9,97 +9,73 @@
 #endif
 
 #include <colors.h>
-#include <stdarg.h>
-#include <string.h>
 
-#ifndef ERROR_PREFIX
-# define ERROR_PREFIX "[ERROR] "
-#endif // ERROR_PREFIX
+#define OUTPUT_MAX_LINE_LEN      120
 
-#ifndef INFO_PREFIX
-# define INFO_PREFIX "[INFO] "
-#endif // INFO_PREFIX
-
-#ifndef WARNING_PREFIX
-# define WARNING_PREFIX "[WARNING] "
-#endif // WARNING_PREFIX
-
-#ifndef DEBUG_PREFIX
-# define DEBUG_PREFIX "[DEBUG] "
-#endif // DEBUG_PREFIX
-
-#ifndef ERROR_LOG_COLOR
-# define ERROR_LOG_COLOR RED_BOLD
-#endif // ERROR_LOG_COLOR
-
-#ifndef INFO_LOG_COLOR
-# define INFO_LOG_COLOR NO_COLOUR
-#endif // INFO_LOG_COLOR
-
-#ifndef WARNING_LOG_COLOR
-# define WARNING_LOG_COLOR ORANGE
-#endif // WARNING_LOG_COLOR
-
-#ifndef DEBUG_LOG_COLOR
-# define DEBUG_LOG_COLOR CYAN
-#endif // DEBUG_LOG_COLOR
-
-#ifndef ERROR_COLOR
-# define ERROR_COLOR RED_BG_WHITE_TEXT
-#endif // ERROR_COLOR
-
-#ifndef INFO_COLOR
-# define INFO_COLOR NO_COLOUR
-#endif // INFO_COLOR
-
-#ifndef WARNING_COLOR
-# define WARNING_COLOR ORANGE
-#endif // WARNING_COLOR
-
-#ifndef DEBUG_COLOR
-# define DEBUG_COLOR CYAN
-#endif // DEBUG_COLOR
-
-#define PADDING                  4
-
-#define fcolor(color, str)       color str NO_COLOUR
-#define pcolor(color, str)       print("%s" str "\n" NO_COLOUR, color)
-#define pcolorinit(color, str)   print("%s" str, color)
-#define pcolorf(color, fmt, ...) print("%s" fmt NO_COLOUR, color, __VA_ARGS__)
+#define fcolor(color, str)          color str NO_COLOR
+#define pcolor(color, str)          writef("%s%s%s", color, str, NO_COLOR)
+#define pcolorln(color, str)        writelnf("%s%s%s", color, str, NO_COLOR)
+#define pcolorf(color, fmt, ...)    writef("%s" fmt NO_COLOR, color, __VA_ARGS__)
+#define pcolorlnf(color, fmt, ...)  writelnf("%s" fmt NO_COLOR, color, __VA_ARGS__)
 
 typedef enum LogLevel {
     LOG_LEVEL_QUIET   = 0,
     LOG_LEVEL_ERROR   = 1,
     LOG_LEVEL_WARNING = 2,
-    LOG_LEVEL_INFO    = 3,
-    LOG_LEVEL_DEBUG   = 4,
-} LogLevel;
+    LOG_LEVEL_CAUTION = 3,
+    LOG_LEVEL_SUCCESS = 4,
+    LOG_LEVEL_INFO    = 5,
+    LOG_LEVEL_DEBUG   = 6,
+} log_level_t;
 
-void            print(const char *fmt, ...) PRINTF_FORMAT(1, 2);
+typedef struct OutputStyle {
+    const char *error_prefix;
+    const char *error_color;
+    const char *warning_prefix;
+    const char *warning_color;
+    const char *success_prefix;
+    const char *success_color;
+    const char *info_prefix;
+    const char *info_color;
+    const char *debug_prefix;
+    const char *debug_color;
+} output_style_t;
 
-void            loginfo(const char *fmt, ...) PRINTF_FORMAT(1, 2);
-void            logwarn(const char *fmt, ...) PRINTF_FORMAT(1, 2);
-void            logerro(const char *fmt, ...) PRINTF_FORMAT(1, 2);
-void            logdebug(const char *fmt, ...) PRINTF_FORMAT(1, 2);
+void            set_output_style(output_style_t *style);
+void            set_error_prefix(const char *prefix);
+void            set_error_color(const char *color);
+void            set_warning_prefix(const char *prefix);
+void            set_warning_color(const char *color);
+void            set_success_prefix(const char *prefix);
+void            set_success_color(const char *color);
+void            set_info_prefix(const char *prefix);
+void            set_info_color(const char *color);
+void            set_debug_prefix(const char *prefix);
+void            set_debug_color(const char *color);
 
-void            info(const char *msg);
-void            warn(const char *msg);
-void            erro(const char *msg);
-void            debug(const char *msg);
-void            panic(const char *msg);
+output_style_t *get_output_style(void);
 
-void            infof(const char *fmt, ...) PRINTF_FORMAT(1, 2);
-void            warnf(const char *fmt, ...) PRINTF_FORMAT(1, 2);
+void            erro(const char *str);
+void            panic(const char *str);
+void            warn(const char *str);
+void            success(const char *str);
+void            info(const char *str);
+void            debug(const char *str);
+
 void            errof(const char *fmt, ...) PRINTF_FORMAT(1, 2);
-void            debugf(const char *fmt, ...) PRINTF_FORMAT(1, 2);
 void            panicf(const char *fmt, ...) PRINTF_FORMAT(1, 2);
+void            warnf(const char *fmt, ...) PRINTF_FORMAT(1, 2);
+void            successf(const char *fmt, ...) PRINTF_FORMAT(1, 2);
+void            infof(const char *fmt, ...) PRINTF_FORMAT(1, 2);
+void            debugf(const char *fmt, ...) PRINTF_FORMAT(1, 2);
 
-void            set_log_level(LogLevel level);
-bool            can_print(LogLevel level);
-bool            should_be_quiet(void);
-void            writeln(const char *fmt, ...) PRINTF_FORMAT(1, 2);
+void            set_log_level(log_level_t level);
+log_level_t     get_log_level(void);
+bool            is_quiet(void);
+
+void            writef(const char *fmt, ...) PRINTF_FORMAT(1, 2);
+void            writeln(const char *str);
+void            writelnf(const char *fmt, ...) PRINTF_FORMAT(1, 2);
 void            new_line(void);
-
-static LogLevel LOG_LEVEL = LOG_LEVEL_ERROR;
 
 #endif // OUTPUT_H

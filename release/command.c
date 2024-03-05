@@ -1,4 +1,3 @@
-#include "cstring.h"
 #include <argument.h>
 #include <assert.h>
 #include <colors.h>
@@ -12,9 +11,9 @@
 
 static bool        compare_command_name(const char *name, const char *input);
 static size_t      calculate_similarity(const char *a, const char *b);
-static const char *find_closest_matching_command(const char *input, Command **cmdv, size_t cmdc);
+static const char *find_closest_matching_command(const char *input, command_t **cmdv, size_t cmdc);
 
-void               command_init(Command *cmd, const char *name, const char *desc, Operation *op) {
+void               command_init(command_t *cmd, const char *name, const char *desc, cmd_op_func *op) {
     assert(cmd != NULL);
     assert(name != NULL);
 
@@ -33,46 +32,46 @@ void               command_init(Command *cmd, const char *name, const char *desc
     cmd->handler        = NULL;
 }
 
-Command command_create(const char *name, const char *desc, Operation *op) {
-    Command cmd;
+command_t command_create(const char *name, const char *desc, cmd_op_func *op) {
+    command_t cmd;
     command_init(&cmd, name, desc, op);
     return cmd;
 }
 
-Command command_define(const char *name, const char *desc, CommandHandler *handler, Operation *op) {
-    Command cmd;
+command_t command_define(const char *name, const char *desc, cmd_handler_func *handler, cmd_op_func *op) {
+    command_t cmd;
     command_init(&cmd, name, desc, op);
     cmd.handler = handler;
     return cmd;
 }
 
-void command_add_info(Command *cmd, const char *info) {
+void command_add_info(command_t *cmd, const char *info) {
     if (cmd) {
         cmd->info = info;
     }
 }
 
-void command_set_args(Command *cmd, Argument **argv, size_t argc) {
+void command_set_args(command_t *cmd, argument_t **argv, size_t argc) {
     if (cmd) {
         cmd->argv = argv;
         cmd->argc = argc;
     }
 }
 
-void command_set_opts(Command *cmd, Option **optv, size_t optc) {
+void command_set_opts(command_t *cmd, option_t **optv, size_t optc) {
     if (cmd) {
         cmd->optv = optv;
         cmd->optc = optc;
     }
 }
 
-int command_index_of(Command **cmdv, size_t cmdc, const char *name) {
+int command_index_of(command_t **cmdv, size_t cmdc, const char *name) {
     if (!cmdv || !name) {
         return -1;
     }
 
     for (size_t i = 0; i < cmdc; ++i) {
-        const Command *cmd = cmdv[i];
+        const command_t *cmd = cmdv[i];
         assert(cmd != NULL);
 
         if (str_equals_case_insensitive(cmd->name, name)) {
@@ -91,37 +90,37 @@ int command_index_of(Command **cmdv, size_t cmdc, const char *name) {
     return -1;
 }
 
-Command *command_find(Command **cmdv, size_t cmdc, const char *name) {
+command_t *command_find(command_t **cmdv, size_t cmdc, const char *name) {
     int i = command_index_of(cmdv, cmdc, name);
     return i == -1 ? NULL : cmdv[i];
 }
 
-void command_print(Command *cmd, int width) {
+void command_print(command_t *cmd, int width) {
     assert(cmd != NULL);
     pcolorf(GREEN, "  %-*s", width + 2, cmd->name);
 
     if (cmd->aliasv) {
-        printf("[");
+        writef("[");
         for (size_t i = 0; i < cmd->aliasc; ++i) {
-            printf("%s", cmd->aliasv[i]);
+            writef("%s", cmd->aliasv[i]);
             if (i + 1 < cmd->aliasc) {
-                printf("|");
+                writef("|");
             }
         }
-        printf("] ");
+        writef("] ");
     }
 
-    printf("%s\n", cmd->desc);
+    writef("%s\n", cmd->desc);
 }
 
-void command_print_all(Command **cmdv, size_t cmdc, int width) {
+void command_print_all(command_t **cmdv, size_t cmdc, int width) {
     assert(cmdv != NULL);
     for (size_t i = 0; i < cmdc; ++i) {
         command_print(cmdv[i], width);
     }
 }
 
-int command_get_print_width(Command **cmdv, size_t cmdc) {
+int command_get_print_width(command_t **cmdv, size_t cmdc) {
     assert(cmdv != NULL);
     int width = 0;
     for (size_t i = 0; i < cmdc; ++i) {
@@ -130,21 +129,21 @@ int command_get_print_width(Command **cmdv, size_t cmdc) {
     return width;
 }
 
-void command_set_aliases(Command *cmd, const char **aliasv, size_t aliasc) {
+void command_set_aliases(command_t *cmd, const char **aliasv, size_t aliasc) {
     if (cmd) {
         cmd->aliasv = aliasv;
         cmd->aliasc = aliasc;
     }
 }
 
-int command_find_loose(Command **cmdv, size_t cmdc, const char *input, const char **buffer, size_t buffersize) {
+int command_find_loose(command_t **cmdv, size_t cmdc, const char *input, const char **buffer, size_t buffersize) {
     assert(cmdv != NULL);
     assert(input != NULL);
     assert(buffer != NULL);
 
     size_t ptr = 0;
     for (size_t i = 0; i < cmdc && i < buffersize; ++i) {
-        Command *cmd = cmdv[i];
+        command_t *cmd = cmdv[i];
         assert(cmd != NULL);
         if (compare_command_name(cmd->name, input)) {
             buffer[ptr++] = cmd->name;
@@ -199,13 +198,13 @@ static size_t calculate_similarity(const char *input, const char *name) {
     return similarity;
 }
 
-static const char *find_closest_matching_command(const char *input, Command **cmdv, size_t cmdc) {
+static const char *find_closest_matching_command(const char *input, command_t **cmdv, size_t cmdc) {
     int         max_similarity = 0;
     const char *closest_match  = NULL;
 
     for (size_t i = 0; i < cmdc; ++i) {
-        Command *cmd        = cmdv[i];
-        int      similarity = calculate_similarity(input, cmd->name);
+        command_t *cmd        = cmdv[i];
+        int        similarity = calculate_similarity(input, cmd->name);
 
         if (similarity > max_similarity) {
             max_similarity = similarity;

@@ -11,12 +11,12 @@
 
 #define ARG_PARSER_ERR_SIZE 1024
 
-static int handle_opt_value(Option *opt, char *name, char *value, InputParser *parser);
+static int handle_opt_value(option_t *opt, char *name, char *value, input_parser_t *parser);
 
 // ==== Implementations =======================================================/
-InputParser
-input_parser_create(Argument **argv, size_t argc, Option **optv, size_t optc, char *errbuf, unsigned int offset) {
-    InputParser parser = {
+input_parser_t
+input_parser_create(argument_t **argv, size_t argc, option_t **optv, size_t optc, char *errbuf, unsigned int offset) {
+    input_parser_t parser = {
         .argv   = argv,
         .argc   = argc,
         .errbuf = errbuf,
@@ -29,7 +29,7 @@ input_parser_create(Argument **argv, size_t argc, Option **optv, size_t optc, ch
     return parser;
 }
 
-void input_parse(InputParser *parser, int argc, char **argv) {
+void input_parse(input_parser_t *parser, int argc, char **argv) {
     size_t current_arg_index = 0;
     bool   parsing_args      = false;
 
@@ -49,7 +49,7 @@ void input_parse(InputParser *parser, int argc, char **argv) {
         if (!parsing_args && is_option) {
             if (current_arg_index > 0) {
                 if (current_arg_index < parser->argc) {
-                    Argument *expected_arg = parser->argv[current_arg_index];
+                    argument_t *expected_arg = parser->argv[current_arg_index];
                     sprintf(parser->errbuf,
                             "Invalid args. Expected argument '%s', but received option '%s'",
                             expected_arg->name,
@@ -71,7 +71,7 @@ void input_parse(InputParser *parser, int argc, char **argv) {
                 // chained short options
                 // currently short options with a value expect a space
                 if (shortlen == 1) {
-                    Option *opt = option_find(parser->optv, parser->optc, NULL, sanitized);
+                    option_t *opt = option_find(parser->optv, parser->optc, NULL, sanitized);
 
                     if (!opt) {
                         sprintf(parser->errbuf, "Received unknown option: %s", sanitized);
@@ -90,7 +90,7 @@ void input_parse(InputParser *parser, int argc, char **argv) {
                     }
                 } else {
                     for (int j = 0; j < shortlen; j++) {
-                        Option *opt = option_find_by_shortcut(parser->optv, parser->optc, sanitized[j]);
+                        option_t *opt = option_find_by_shortcut(parser->optv, parser->optc, sanitized[j]);
                         if (opt) {
                             if (option_is_level(opt)) {
                                 opt->levelval = min(opt->levelval + 1, OPTION_MAX_LEVEL);
@@ -119,7 +119,7 @@ void input_parse(InputParser *parser, int argc, char **argv) {
                 name = sanitized;
             }
 
-            Option *current_opt = option_find_by_long_name(parser->optv, parser->optc, name);
+            option_t *current_opt = option_find_by_long_name(parser->optv, parser->optc, name);
 
             if (current_opt == NULL) {
                 sprintf(parser->errbuf, "Received unknown option: %s", name);
@@ -140,7 +140,7 @@ void input_parse(InputParser *parser, int argc, char **argv) {
                 break;
             }
 
-            Argument *arg = parser->argv[current_arg_index];
+            argument_t *arg = parser->argv[current_arg_index];
 
             if (argument_is_array(arg)) {
                 size_t new_count = arg->valuec + 1;
@@ -167,7 +167,7 @@ void input_parse(InputParser *parser, int argc, char **argv) {
     }
 
     for (size_t i = 0; i < parser->argc; ++i) {
-        Argument *arg = parser->argv[i];
+        argument_t *arg = parser->argv[i];
 
         // not required, no need to check anything
         if (argument_is_optional(arg)) {
@@ -196,27 +196,27 @@ void input_parse(InputParser *parser, int argc, char **argv) {
     }
 }
 
-char *get_arg(Command *cmd, const char *name) {
-    Argument *arg = argument_find(cmd->argv, cmd->argc, name);
+char *get_arg(command_t *cmd, const char *name) {
+    argument_t *arg = argument_find(cmd->argv, cmd->argc, name);
     return arg ? arg->value : NULL;
 }
 
-bool get_bool_opt(Command *cmd, const char *name) {
-    Option *opt = option_find(cmd->optv, cmd->optc, name, NULL);
+bool get_bool_opt(command_t *cmd, const char *name) {
+    option_t *opt = option_find(cmd->optv, cmd->optc, name, NULL);
     return opt ? opt->boolval : false;
 }
 
-char *get_string_opt(Command *cmd, const char *name) {
-    Option *opt = option_find(cmd->optv, cmd->optc, name, NULL);
+char *get_string_opt(command_t *cmd, const char *name) {
+    option_t *opt = option_find(cmd->optv, cmd->optc, name, NULL);
     return opt ? opt->stringval : NULL;
 }
 
-char **get_string_array_opt(Command *cmd, const char *name) {
-    Option *opt = option_find(cmd->optv, cmd->optc, name, NULL);
+char **get_string_array_opt(command_t *cmd, const char *name) {
+    option_t *opt = option_find(cmd->optv, cmd->optc, name, NULL);
     return opt ? opt->stringv : NULL;
 }
 
-static int handle_opt_value(Option *opt, char *name, char *value, InputParser *parser) {
+static int handle_opt_value(option_t *opt, char *name, char *value, input_parser_t *parser) {
     opt->provided = true;
 
     if (option_is_level(opt)) {

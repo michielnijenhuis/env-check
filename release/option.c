@@ -1,15 +1,14 @@
-#include "colors.h"
 #include <assert.h>
 #include <colors.h>
 #include <cstring.h>
-#include <string.h>
 #include <math-utils.h>
 #include <math.h>
 #include <option.h>
 #include <output.h>
+#include <string.h>
 
 // ==== Implementations =======================================================/
-void option_init(Option *opt, const char *name, const char *shortcut, const char *desc) {
+void option_init(option_t *opt, const char *name, const char *shortcut, const char *desc) {
     assert(opt != NULL);
     assert(name != NULL);
 
@@ -26,22 +25,23 @@ void option_init(Option *opt, const char *name, const char *shortcut, const char
     opt->__meta    = 0;
 }
 
-Option option_create(const char *name, const char *shortcut, const char *desc) {
-    Option opt;
+option_t option_create(const char *name, const char *shortcut, const char *desc) {
+    option_t opt;
     option_init(&opt, name, shortcut, desc);
     return opt;
 }
 
-Option option_create_string_opt(const char *name, const char *shortcut, const char *desc, char *defval, bool required) {
-    Option opt;
+option_t
+option_create_string_opt(const char *name, const char *shortcut, const char *desc, char *defval, bool required) {
+    option_t opt;
     option_init(&opt, name, shortcut, desc);
     option_set_flag(&opt, required ? OPTION_VALUE_REQUIRED : OPTION_VALUE_OPTIONAL);
     opt.stringval = defval;
     return opt;
 }
 
-Option option_create_bool_opt(const char *name, const char *shortcut, const char *desc, bool defval, bool negatable) {
-    Option opt;
+option_t option_create_bool_opt(const char *name, const char *shortcut, const char *desc, bool defval, bool negatable) {
+    option_t opt;
     option_init(&opt, name, shortcut, desc);
     if (negatable) {
         option_add_flag(&opt, OPTION_VALUE_NEGATABLE);
@@ -50,42 +50,54 @@ Option option_create_bool_opt(const char *name, const char *shortcut, const char
     return opt;
 }
 
-Option option_create_array_opt(const char *name, const char *shortcut, const char *desc) {
-    Option opt;
+option_t option_create_array_opt(const char *name, const char *shortcut, const char *desc) {
+    option_t opt;
     option_init(&opt, name, shortcut, desc);
     option_set_flag(&opt, OPTION_VALUE_ARRAY);
     return opt;
 }
 
-void option_set_flag(Option *opt, int flag) {
+void option_set_flag(option_t *opt, int flag) {
     if (opt) {
         opt->__flag = flag;
     }
 }
 
-void option_add_flag(Option *opt, int flag) {
+void option_add_flag(option_t *opt, int flag) {
     if (opt) {
         opt->__flag |= flag;
     }
 }
 
-Option *option_find(Option **optv, size_t optc, const char *name, const char *shortcut) {
+void option_set_boolval(option_t *opt, bool val) {
+    if (opt) {
+        opt->boolval = val;
+    }
+}
+
+void option_set_strval(option_t *opt, char *val) {
+    if (opt) {
+        opt->stringval = val;
+    }
+}
+
+option_t *option_find(option_t **optv, size_t optc, const char *name, const char *shortcut) {
     int i = option_index_of(optv, optc, name, shortcut);
     return i == -1 ? NULL : optv[i];
 }
 
-Option *option_find_by_shortcut(Option **optv, size_t optc, char shortcut) {
+option_t *option_find_by_shortcut(option_t **optv, size_t optc, char shortcut) {
     char __short[2];
     __short[0] = shortcut;
     __short[1] = '\0';
     return option_find(optv, optc, NULL, __short);
 }
 
-Option *option_find_by_long_name(Option **optv, size_t optc, const char *name) {
+option_t *option_find_by_long_name(option_t **optv, size_t optc, const char *name) {
     return option_find(optv, optc, name, NULL);
 }
 
-int option_index_of(Option **optv, size_t optc, const char *name, const char *shortcut) {
+int option_index_of(option_t **optv, size_t optc, const char *name, const char *shortcut) {
     if (optv == NULL) {
         return -1;
     }
@@ -95,7 +107,7 @@ int option_index_of(Option **optv, size_t optc, const char *name, const char *sh
     bool might_be_negating = str_starts_with(name, "no-");
 
     for (size_t i = 0; i < optc; ++i) {
-        Option *opt = optv[i];
+        option_t *opt = optv[i];
         assert(opt != NULL);
         assert(opt->name != NULL);
 
@@ -113,7 +125,7 @@ int option_index_of(Option **optv, size_t optc, const char *name, const char *sh
                     return i;
                 }
             }
-        } else if (opt->shortcut && shortcut && str_equals_case_insensitive(opt->shortcut, shortcut)) {
+        } else if (opt->shortcut && shortcut && str_equals(opt->shortcut, shortcut)) {
             return i;
         }
     }
@@ -121,47 +133,47 @@ int option_index_of(Option **optv, size_t optc, const char *name, const char *sh
     return -1;
 }
 
-bool option_get_bool(Option **optv, size_t optc, const char *name) {
-    Option *opt = option_find(optv, optc, name, NULL);
+bool option_get_bool(option_t **optv, size_t optc, const char *name) {
+    option_t *opt = option_find(optv, optc, name, NULL);
     return opt ? opt->boolval : false;
 }
 
-int option_get_level(Option **optv, size_t optc, const char *name) {
-    Option *opt = option_find(optv, optc, name, NULL);
+int option_get_level(option_t **optv, size_t optc, const char *name) {
+    option_t *opt = option_find(optv, optc, name, NULL);
     return opt ? opt->levelval : 0;
 }
 
-char *option_get_string(Option **optv, size_t optc, const char *name) {
-    Option *opt = option_find(optv, optc, name, NULL);
+char *option_get_string(option_t **optv, size_t optc, const char *name) {
+    option_t *opt = option_find(optv, optc, name, NULL);
     return opt ? opt->stringval : NULL;
 }
 
-char **option_get_strings(Option **optv, size_t optc, const char *name) {
-    Option *opt = option_find(optv, optc, name, NULL);
+char **option_get_strings(option_t **optv, size_t optc, const char *name) {
+    option_t *opt = option_find(optv, optc, name, NULL);
     return opt ? opt->stringv : NULL;
 }
 
-void option_print_tag(Option *opt) {
+void option_print_tag(option_t *opt) {
     assert(opt != NULL);
     assert(opt->name != NULL);
 
-    printf(" [");
+    writef(" [");
     if (opt->shortcut) {
-        printf("-%c|", opt->shortcut[0]);
+        writef("-%c|", opt->shortcut[0]);
     }
-    printf("--%s", opt->name);
+    writef("--%s", opt->name);
     if (option_is_negatable(opt)) {
-        printf("|no-%s", opt->name);
+        writef("|no-%s", opt->name);
     } else if (option_has_value(opt)) {
         char upper[strlen(opt->name) + 1];
         strcpy(upper, opt->name);
         str_to_upper(upper);
-        printf(" %s", upper);
+        writef(" %s", upper);
     }
-    printf("]");
+    writef("]");
 }
 
-void option_print(Option *opt, int width) {
+void option_print(option_t *opt, int width) {
     assert(opt != NULL);
     assert(opt->name != NULL);
     char name[width + 1];
@@ -216,23 +228,23 @@ void option_print(Option *opt, int width) {
 
     // desc
     if (opt->desc) {
-        printf("%s", opt->desc);
+        writef("%s", opt->desc);
     }
 
     // default value
     if (opt->stringval) {
-        printf("%s%s[default: %s]%s", YELLOW, (opt->desc ? " " : ""), opt->stringval, NO_COLOUR);
+        writef("%s%s[default: %s]%s", YELLOW, (opt->desc ? " " : ""), opt->stringval, NO_COLOR);
     }
 
-    printf("\n");
+    writef("\n");
 }
 
-int option_get_print_width(Option **optv, size_t optc) {
+int option_get_print_width(option_t **optv, size_t optc) {
     assert(optv != NULL);
 
     int width = 4; // base for short options ("-X, ")
     for (size_t i = 0; i < optc; ++i) {
-        Option *opt = optv[i];
+        option_t *opt = optv[i];
         assert(opt != NULL);
         assert(opt->name != NULL);
         int base = 4;
@@ -260,16 +272,16 @@ int option_get_print_width(Option **optv, size_t optc) {
     return width;
 }
 
-void option_print_all(Option **optv, size_t optc, int width) {
+void option_print_all(option_t **optv, size_t optc, int width) {
     assert(optv != NULL);
     for (size_t i = 0; i < optc; ++i) {
         option_print(optv[i], width);
     }
 }
 
-void option_sort(Option **optv, size_t optc) {
+void option_sort(option_t **optv, size_t optc) {
     assert(optv != NULL);
-    Option *tmp = NULL;
+    option_t *tmp = NULL;
     for (size_t i = 0; i < optc; ++i) {
         for (size_t j = 0; j < optc - 1 - i; ++j) {
             if (strcmp(optv[j]->name, optv[j + 1]->name) > 0) {
@@ -304,12 +316,12 @@ bool option_is_long(const char *name) {
            ((name[2] >= 'a' && name[2] <= 'z') || (name[2] >= 'A' && name[2] <= 'Z'));
 }
 
-bool option_is_bool(Option *opt) {
+bool option_is_bool(option_t *opt) {
     assert(opt != NULL);
     return opt->__flag & OPTION_NO_VALUE;
 }
 
-bool option_has_value(Option *opt) {
+bool option_has_value(option_t *opt) {
     assert(opt != NULL);
     if (opt->__flag & OPTION_NO_VALUE) {
         return false;
@@ -318,37 +330,36 @@ bool option_has_value(Option *opt) {
         return false;
     }
 
-    return opt->__flag & OPTION_VALUE_ARRAY
-        || opt->__flag & OPTION_VALUE_REQUIRED 
-        || opt->__flag & OPTION_VALUE_OPTIONAL;
+    return opt->__flag & OPTION_VALUE_ARRAY || opt->__flag & OPTION_VALUE_REQUIRED ||
+           opt->__flag & OPTION_VALUE_OPTIONAL;
 }
 
-bool option_is_level(Option *opt) {
+bool option_is_level(option_t *opt) {
     assert(opt != NULL);
     return opt->__flag & OPTION_LEVELS;
 }
 
-bool option_is_negatable(Option *opt) {
+bool option_is_negatable(option_t *opt) {
     assert(opt != NULL);
     return opt->__flag & OPTION_VALUE_NEGATABLE;
 }
 
-bool option_is_string(Option *opt) {
+bool option_is_string(option_t *opt) {
     assert(opt != NULL);
     return !option_is_array(opt) && !option_is_level(opt) && option_has_value(opt);
 }
 
-bool option_is_array(Option *opt) {
+bool option_is_array(option_t *opt) {
     assert(opt != NULL);
     return opt->__flag & OPTION_VALUE_ARRAY;
 }
 
-bool option_expects_value(Option *opt) {
+bool option_expects_value(option_t *opt) {
     assert(opt != NULL);
     return opt->__flag & OPTION_VALUE_REQUIRED;
 }
 
-bool option_was_provided(Option *opt) {
+bool option_was_provided(option_t *opt) {
     assert(opt != NULL);
     return opt->provided;
 }
