@@ -13,14 +13,14 @@ jobs:
 
             - name: Download release asset
               run: |
-                  wget -O my-cli.tar.gz ${{ github.event.release.tarball_url }}
+                  wget -O envc.tar.gz ${{ github.event.release.tarball_url }}
 
             - name: Calculate SHA256
               run: |
-                  sha256=$(shasum -a 256 my-cli.tar.gz | cut -d' ' -f1)
+                  sha256=$(shasum -a 256 envc.tar.gz | cut -d' ' -f1)
                   echo "SHA256: $sha256" >> sha256.txt
 
             - name: Update Formula
               run: |
-                  sed -i '' "s/url \"\(.*\)\"/url \"${{ github.event.release.tarball_url }}\"/" ./Formula/envc.rb
-                  sed -i '' "s/sha256 \"\(.*\)\"/sha256 \"$(cat sha256.txt | tr -d '\n')\"/" ./Formula/envc.rb
+                  sed -i '' "s/url \"url\"/url \"${{ github.event.release.tarball_url }}\"/" ./Formula/envc.rb
+                  sed -i '' "s/sha256 \"sha256\"/sha256 \"$(cat sha256.txt | tr -d '\n')\"/" ./Formula/envc.rb
