@@ -22,5 +22,6 @@ jobs:
 
             - name: Update Formula
               run: |
-                  sed -i '' "s/url \"url\"/url \"${{ github.event.release.tarball_url }}\"/" ./Formula/envc.rb
-                  sed -i '' "s/sha256 \"sha256\"/sha256 \"$(cat sha256.txt | tr -d '\n')\"/" ./Formula/envc.rb
+                  ls
+                  sed -i '' "s/url \"url\"/url \"${{ github.event.release.tarball_url }}\"/" Formula/envc.rb
+                  sed -i '' "s/sha256 \"sha256\"/sha256 \"$(cat sha256.txt | tr -d '\n')\"/" Formula/envc.rb
