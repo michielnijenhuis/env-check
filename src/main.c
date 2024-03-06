@@ -1,6 +1,4 @@
 //=== Includes ===============================================================//
-#include "cstring.h"
-
 #include <array.h>
 #include <assert.h>
 #include <cli.h>
@@ -55,8 +53,7 @@ typedef struct EnvVar {
 
 DEFINE_HASH_MAP(hash_table_t, env_var_t *);
 
-//=== Prototypes
-//===================================================================//
+//=== Prototypes =============================================================//
 hash_table_t ht_create(size_t cap);
 void         ht_free(hash_table_t *ht);
 env_var_t   *ht_get(hash_table_t *ht, const char *key);
@@ -147,7 +144,7 @@ int main(int argc, char **argv) {
     return run_application(&program, argc, argv);
 }
 
-//=== hash_table_t =====================================================================//
+//=== hash_table_t ===========================================================//
 hash_table_t ht_create(size_t cap) {
     hash_table_t ht = HT_CREATE(hash_table_t, env_var_t *, cap, NULL, free_env_var);
     return ht;
@@ -157,16 +154,16 @@ void ht_free(hash_table_t *ht) {
     HT_FREE(hash_table_t, ht);
 }
 
-env_var_t *ht_get(hash_table_t *hash_table_t, const char *key) {
-    HT_GET(hash_table_t, hash_table_t, key, NULL);
+env_var_t *ht_get(hash_table_t *ht, const char *key) {
+    HT_GET(hash_table_t, ht, key, NULL);
 }
 
-bool ht_put(hash_table_t *hash_table_t, const char *key, env_var_t *value) {
-    HT_PUT(hash_table_t, hash_table_t, key, value);
+bool ht_put(hash_table_t *ht, const char *key, env_var_t *value) {
+    HT_PUT(hash_table_t, ht, key, value);
 }
 
-void ht_keys(hash_table_t *hash_table_t, const char **buffer, size_t buffersize) {
-    HT_KEYS(hash_table_t, hash_table_t, buffer, buffersize);
+void ht_keys(hash_table_t *ht, const char **buffer, size_t buffersize) {
+    HT_KEYS(hash_table_t, ht, buffer, buffersize);
 }
 
 //=== Helpers ================================================================//
@@ -351,7 +348,7 @@ void print_env_var(const env_var_t *var, int first_colwidth, int second_colwidth
     writef("\n"); // line break
 }
 
-void create_env_var_from_line(hash_table_t *hash_table,
+void create_env_var_from_line(hash_table_t *ht,
                               const char   *line,
                               const char  **ignorev,
                               size_t        ignorec,
@@ -359,7 +356,7 @@ void create_env_var_from_line(hash_table_t *hash_table,
                               size_t        focusc,
                               bool          comparing,
                               bool          interlace) {
-    assert(hash_table != NULL);
+    assert(ht != NULL);
 
     if (!line) {
         return;
@@ -412,7 +409,7 @@ void create_env_var_from_line(hash_table_t *hash_table,
 
     char trimmed[vallen + 1];
     strcpy(trimmed, delimpos + 1);
-    vallen          = trim_string(trimmed);
+    vallen = trim_string(trimmed);
     // printf("%s: %zu\n", name, vallen);
     trimmed[vallen] = '\0';
     if (!str_equals_case_insensitive(trimmed, "null") && !str_equals_case_insensitive(trimmed, "(null)")) {
@@ -427,7 +424,7 @@ void create_env_var_from_line(hash_table_t *hash_table,
     // of vars that at this point might not be present yet in the HT
     // TODO: add coloring to interlaced values when printing
 
-    env_var_t *var = ht_get(hash_table, name);
+    env_var_t *var = ht_get(ht, name);
     if (var != NULL) {
         if (comparing && var->cmpval == NULL) {
             var->cmpval    = value;
@@ -468,7 +465,7 @@ void create_env_var_from_line(hash_table_t *hash_table,
         var->cmpvallen  = comparing ? vallen : 0;
         var->interlaced = interlaces;
 
-        ht_put(hash_table, name, var);
+        ht_put(ht, name, var);
         set_env_var_status(var);
     }
 }
@@ -534,7 +531,7 @@ void set_env_var_status(env_var_t *var) {
     var->status = OK;
 }
 
-int read_env_file(hash_table_t *hash_table_t,
+int read_env_file(hash_table_t *ht,
                   const char   *path,
                   const char  **ignorev,
                   size_t        ignorec,
@@ -542,7 +539,7 @@ int read_env_file(hash_table_t *hash_table_t,
                   size_t        focusc,
                   bool          comparing,
                   bool          interlace) {
-    assert(hash_table_t != NULL);
+    assert(ht != NULL);
     assert(path != NULL);
 
     if (!file_exists(path)) {
@@ -567,7 +564,7 @@ int read_env_file(hash_table_t *hash_table_t,
     }
 
     while ((read = getline(&buffer, &len, file)) != -1) {
-        create_env_var_from_line(hash_table_t, buffer, ignorev, ignorec, focusv, focusc, comparing, interlace);
+        create_env_var_from_line(ht, buffer, ignorev, ignorec, focusv, focusc, comparing, interlace);
     }
 
     fclose(file);
@@ -615,7 +612,7 @@ void print_title(const char *filename) {
     pcolorlnf(titleclr, "%s", underline);
 }
 
-//=== command_t impl ===========================================================//
+//=== command impl ===========================================================//
 int handle_cmd(command_t *self) {
     char *target       = get_string_opt(self, "target");
     char *source       = get_string_opt(self, "source");
