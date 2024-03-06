@@ -22,6 +22,13 @@ list    Lists all variables in the target env file, sorted alphabetically.
 
 # Installation
 
+## Homebrew
+```console
+$ brew tap michielnijenhuis/env-check https://github.com/michielnijenhuis/env-check.git
+$ brew install envc
+```
+
+## Makefile
 ```console
 $ make
 ```

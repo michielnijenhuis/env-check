@@ -54,17 +54,13 @@ printf "#!/bin/bash\n\n" > $BUILD_SCRIPT
     printf "set -x\n\n";
 } >> $BUILD_SCRIPT
 
-printf "\$CMD -DENVC_VERSION=%s%s%s -I. -o bin/envc dist/main.c" '\"' "$VERSION" '\"' >> "$BUILD_SCRIPT"
+printf "\$CMD -DENVC_VERSION=%s%s%s -Idist -o bin/envc dist/main.c" '\"' "$VERSION" '\"' >> "$BUILD_SCRIPT"
 for LIB in "${LIBS[@]}"; do
     if [ -f "dist/$LIB.c" ]; then
         printf " dist/%s.c" "$LIB" >> "$BUILD_SCRIPT"
     fi
 done
-{
-    printf "\n\n"
-    printf "sudo mv ./bin/envc /usr/local/bin/envc"
-    printf "\n\n"
-} >> "$BUILD_SCRIPT"
+printf "\n"
 
 cp "src/main.c" "dist/main.c"
 

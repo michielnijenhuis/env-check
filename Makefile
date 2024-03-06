@@ -2,7 +2,7 @@
 all: build
 
 CC = clang
-CFLAGS = -Wall
+CFLAGS = -Wall -DNDEBUG
 OPT = -O2
 BIN_DIR = bin
 NAME = envc
