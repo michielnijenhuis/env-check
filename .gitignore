@@ -1,4 +1,3 @@
-bin/main
-bin/main.dSYM
-src/main
+bin/*
+!bin/.gitkeep
 .clang-format

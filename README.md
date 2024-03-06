@@ -2,12 +2,12 @@
 A program that compares two .env files and shows their values and differences.
 
 ## Usage:
-```sh
-command [options] [arguments]
+```console
+$ command [options] [arguments]
 ```
 
 ## Options:
-```sh
+```console
 -h, --help              Display help for the given command.
 -q, --quiet             Do not output any message.
     --ansi|no-ansi      Force (or disable) ANSI output.
@@ -15,7 +15,13 @@ command [options] [arguments]
 ```
 
 ## Available commands:
-```sh
+```console
 cmp     [compare] Compares two env files files.
 list    Lists all variables in the target env file, sorted alphabetically.
+```
+
+# Installation
+
+```console
+$ make
 ```
