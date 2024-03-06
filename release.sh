@@ -3,8 +3,10 @@
 # shellcheck disable=SC1091
 source "$HOME/dotfiles/.aliases"
 
-rm -rf ./release
-mkdir -p release
+CLIBS=$(realpath "$HOME/Code/c-libs")
+
+rm -rf ./dist
+mkdir -p dist
 
 LIBS=(
     "argument"
@@ -29,19 +31,19 @@ for LIB in "${LIBS[@]}"; do
     FILE="/usr/local/include/$LIB.h"
     
     if [ -f "$FILE" ]; then
-        sudo cp "$FILE" "release/$LIB.h"
+        sudo cp "$FILE" "dist/$LIB.h"
     fi
 done
 
 for LIB in "${LIBS[@]}"; do
-    FILE="/Users/michielnijenhuis/Code/c-libs/src/$LIB.c"
+    FILE="$CLIBS/src/$LIB.c"
 
     if [ -f "$FILE" ]; then
-        sudo cp "$FILE" "release/$LIB.c"
+        sudo cp "$FILE" "dist/$LIB.c"
     fi
 done
 
-BUILD_SCRIPT="release/build.sh"
+BUILD_SCRIPT="./build.sh"
 touch "$BUILD_SCRIPT"
 printf "#!/bin/bash\n\n" > $BUILD_SCRIPT
 {
@@ -52,18 +54,18 @@ printf "#!/bin/bash\n\n" > $BUILD_SCRIPT
     printf "set -x\n\n";
 } >> $BUILD_SCRIPT
 
-printf "\$CMD -DENVC_VERSION=%s%s%s -I. -o ./envc main.c" '\"' "$VERSION" '\"' >> "$BUILD_SCRIPT"
+printf "\$CMD -DENVC_VERSION=%s%s%s -I. -o bin/envc dist/main.c" '\"' "$VERSION" '\"' >> "$BUILD_SCRIPT"
 for LIB in "${LIBS[@]}"; do
-    if [ -f "release/$LIB.c" ]; then
-        printf " %s.c" "$LIB" >> "$BUILD_SCRIPT"
+    if [ -f "dist/$LIB.c" ]; then
+        printf " dist/%s.c" "$LIB" >> "$BUILD_SCRIPT"
     fi
 done
 {
     printf "\n\n"
-    printf "sudo cp ./envc /usr/local/bin"
+    printf "sudo mv ./bin/envc /usr/local/bin/envc"
     printf "\n\n"
 } >> "$BUILD_SCRIPT"
 
-cp "src/main.c" "release/main.c"
+cp "src/main.c" "dist/main.c"
 
 compile -r -DENVC_VERSION=\\\""$VERSION"\\\" -o bin/main src/main
