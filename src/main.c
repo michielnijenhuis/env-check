@@ -48,7 +48,7 @@ typedef struct EnvVar {
     size_t           namelen;
     size_t           vallen;
     size_t           cmpvallen;
-    bool             interlaced;
+    bool             interpolated;
 } env_var_t;
 
 DEFINE_HASH_MAP(hash_table_t, env_var_t *);
@@ -68,7 +68,7 @@ void         create_env_var_from_line(hash_table_t *ht,
                                       const char  **focusv,
                                       size_t        focusc,
                                       bool          comparing,
-                                      bool          interlace);
+                                      bool          interpolate);
 void         set_env_var_status(env_var_t *var);
 int          read_env_file(hash_table_t *ht,
                            const char   *path,
@@ -77,12 +77,12 @@ int          read_env_file(hash_table_t *ht,
                            const char  **focusv,
                            size_t        focusc,
                            bool          comparing,
-                           bool          interlace);
+                           bool          interpolate);
 size_t       find_max_width_in_array(env_var_t **varv, size_t varc, bool name);
 size_t       trim_string(char *str);
 bool         is_numeric(const char *str);
-bool         is_interlaced(const char *str);
-void         interlace_env_vars(hash_table_t *ht, const char **keyv, size_t keyc);
+bool         is_interpolated(const char *str);
+void         interpolate_env_vars(hash_table_t *ht, const char **keyv, size_t keyc);
 void         prepare_value_for_printing(const char *value, size_t vallen, char *buf, bool is_empty, int colwidth);
 void print_env_var(const env_var_t *var, int first_colwidth, int second_colwidth, int third_colwidth, bool comparing);
 void sort_env_vars_array(const char **keyv, size_t keyc);
@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
         option_create_string_opt("key", "k", "Comma seperated list of variable name patterns to focus on", NULL, true);
     option_t truncate_opt =
         option_create_string_opt("truncate", "T", "The amount of chars to truncate keys or values to", "40", false);
-    option_t interlace_opt = option_create("interlace", "I", "Interlate env var values that refer to other env vars");
+    option_t interpolate_opt = option_create("interpolate", "I", "Interpolate env var values that refer to other env vars");
 
     //=== Compare ============================================================//
     command_t compare_cmd = command_create("cmp", "Compares two env files files.", compare);
@@ -121,7 +121,7 @@ int main(int argc, char **argv) {
                                    &cmp_missing_opt,
                                    &cmp_undefined_opt,
                                    &cmp_divergent_opt,
-                                   &interlace_opt};
+                                   &interpolate_opt};
     compare_cmd.optv            = cmp_opts;
     compare_cmd.optc            = ARRAY_LEN(cmp_opts);
     const char *aliasv[]        = {"compare"};
@@ -131,7 +131,7 @@ int main(int argc, char **argv) {
     command_t list_cmd =
         command_create("list", "Lists all variables in the target env file, sorted alphabetically.", list);
     option_t  list_target_opt = option_create_string_opt("target", "t", "Path to the .env file", "./.env", false);
-    option_t *list_optv[]     = {&list_target_opt, &ignore_opt, &key_opt, &truncate_opt, &interlace_opt};
+    option_t *list_optv[]     = {&list_target_opt, &ignore_opt, &key_opt, &truncate_opt, &interpolate_opt};
     list_cmd.optv             = list_optv;
     list_cmd.optc             = ARRAY_LEN(list_optv);
 
@@ -355,7 +355,7 @@ void create_env_var_from_line(hash_table_t *ht,
                               const char  **focusv,
                               size_t        focusc,
                               bool          comparing,
-                              bool          interlace) {
+                              bool          interpolate) {
     assert(ht != NULL);
 
     if (!line) {
@@ -419,10 +419,10 @@ void create_env_var_from_line(hash_table_t *ht,
         vallen   = 0;
     }
 
-    bool interlaces = interlace && !str_is_empty(value) && str_starts_with(value, "${") && str_ends_with(value, "}");
+    bool interpolates = interpolate && !str_is_empty(value) && str_starts_with(value, "${") && str_ends_with(value, "}");
     // TODO: loop over all vars after creating the HT, so we can reference values
     // of vars that at this point might not be present yet in the HT
-    // TODO: add coloring to interlaced values when printing
+    // TODO: add coloring to interpolated values when printing
 
     env_var_t *var = ht_get(ht, name);
     if (var != NULL) {
@@ -433,8 +433,8 @@ void create_env_var_from_line(hash_table_t *ht,
             set_env_var_status(var);
         }
 
-        if (interlaces) {
-            var->interlaced = true;
+        if (interpolates) {
+            var->interpolated = true;
         }
     } else {
         var = malloc(sizeof(*var));
@@ -463,29 +463,29 @@ void create_env_var_from_line(hash_table_t *ht,
         var->val        = comparing ? NULL : value;
         var->vallen     = comparing ? 0 : vallen;
         var->cmpvallen  = comparing ? vallen : 0;
-        var->interlaced = interlaces;
+        var->interpolated = interpolates;
 
         ht_put(ht, name, var);
         set_env_var_status(var);
     }
 }
 
-bool is_interlaced(const char *str) {
+bool is_interpolated(const char *str) {
     if (str == NULL) {
         return false;
     }
     return str_starts_with(str, "${") && str_ends_with(str, "}");
 }
 
-void interlace_env_vars(hash_table_t *ht, const char **keyv, size_t keyc) {
+void interpolate_env_vars(hash_table_t *ht, const char **keyv, size_t keyc) {
     for (size_t i = 0; i < keyc; ++i) {
         const char *key = keyv[i];
         env_var_t  *var = ht_get(ht, key);
-        if (!var || !var->interlaced) {
+        if (!var || !var->interpolated) {
             continue;
         }
-        bool val_is_interlaced = is_interlaced(var->val);
-        if (val_is_interlaced) {
+        bool val_is_interpolated = is_interpolated(var->val);
+        if (val_is_interpolated) {
             char buf[var->vallen];
             str_slice(var->val, 2, var->vallen - 1, buf);
             env_var_t *ref = ht_get(ht, buf);
@@ -493,8 +493,8 @@ void interlace_env_vars(hash_table_t *ht, const char **keyv, size_t keyc) {
                 var->val = ref->val ? strdup(ref->val) : NULL;
             }
         }
-        bool cmpval_is_interlaced = is_interlaced(var->cmpval);
-        if (cmpval_is_interlaced) {
+        bool cmpval_is_interpolated = is_interpolated(var->cmpval);
+        if (cmpval_is_interpolated) {
             char buf[var->cmpvallen];
             str_slice(var->cmpval, 2, var->cmpvallen - 1, buf);
             env_var_t *ref = ht_get(ht, buf);
@@ -538,7 +538,7 @@ int read_env_file(hash_table_t *ht,
                   const char  **focusv,
                   size_t        focusc,
                   bool          comparing,
-                  bool          interlace) {
+                  bool          interpolate) {
     assert(ht != NULL);
     assert(path != NULL);
 
@@ -564,7 +564,7 @@ int read_env_file(hash_table_t *ht,
     }
 
     while ((read = getline(&buffer, &len, file)) != -1) {
-        create_env_var_from_line(ht, buffer, ignorev, ignorec, focusv, focusc, comparing, interlace);
+        create_env_var_from_line(ht, buffer, ignorev, ignorec, focusv, focusc, comparing, interpolate);
     }
 
     fclose(file);
@@ -622,7 +622,7 @@ int handle_cmd(command_t *self) {
     bool  missing      = get_bool_opt(self, "missing");
     bool  undefined    = get_bool_opt(self, "undefined");
     bool  divergent    = get_bool_opt(self, "divergent");
-    bool  interlace    = get_bool_opt(self, "interlace");
+    bool  interpolate    = get_bool_opt(self, "interpolate");
 
     int   truncate_val = truncate ? atoi(truncate) : 0;
     if (truncate_val > 0) {
@@ -642,7 +642,7 @@ int handle_cmd(command_t *self) {
     hash_table_t ht = ht_create(50);
 
     if (comparing &&
-        read_env_file(&ht, source, (const char **) ignorev, ignorec, (const char **) focusv, focusc, false, interlace) >
+        read_env_file(&ht, source, (const char **) ignorev, ignorec, (const char **) focusv, focusc, false, interpolate) >
             0) {
         free_strings(ignorev, ignorec);
         free_strings(focusv, focusc);
@@ -657,7 +657,7 @@ int handle_cmd(command_t *self) {
                       (const char **) focusv,
                       focusc,
                       comparing,
-                      interlace) > 0) {
+                      interpolate) > 0) {
         free_strings(ignorev, ignorec);
         free_strings(focusv, focusc);
         ht_free(&ht);
@@ -672,8 +672,8 @@ int handle_cmd(command_t *self) {
     ht_keys(&ht, keys, vars);
     sort_env_vars_array(keys, vars);
 
-    if (interlace) {
-        interlace_env_vars(&ht, keys, vars);
+    if (interpolate) {
+        interpolate_env_vars(&ht, keys, vars);
     }
 
     if (comparing) {
