@@ -17,5 +17,5 @@ jobs:
                   user_name: Michiel Nijenhuis
                   user_email: michiel.nijenhuis@gmail.com
                   no_fork: false
-                  tap: michielnijenhuis/env-check
+                  tap: michielnijenhuis/cli
                   formula: envc

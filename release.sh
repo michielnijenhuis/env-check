@@ -29,7 +29,7 @@ for LIB in "${LIBS[@]}"; do
     FILE="/usr/local/include/$LIB.h"
     
     if [ -f "$FILE" ]; then
-        sudo cp "$FILE" "dist/$LIB.h"
+        cp "$FILE" "dist/$LIB.h"
     fi
 done
 
@@ -37,7 +37,7 @@ for LIB in "${LIBS[@]}"; do
     FILE="$CLIBS/src/$LIB.c"
 
     if [ -f "$FILE" ]; then
-        sudo cp "$FILE" "dist/$LIB.c"
+        cp "$FILE" "dist/$LIB.c"
     fi
 done
 
