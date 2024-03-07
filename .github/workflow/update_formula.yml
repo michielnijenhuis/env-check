@@ -1,0 +1,51 @@
+name: Update Formula
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update_formula:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install pyyaml requests
+
+      - name: Get latest release information
+        id: get_release
+        run: |
+          python << END
+          import requests
+          import yaml
+
+          response = requests.get('https://api.github.com/repos/michielnijenhuis/env-check/releases/latest')
+          release_data = response.json()
+
+          latest_url = release_data['tarball_url']
+          latest_sha256 = release_data['assets'][0]['checksum']['sha256']
+
+          with open('release_data.yaml', 'w') as f:
+              yaml.dump({'url': latest_url, 'sha256': latest_sha256}, f)
+          END
+
+      - name: Update Formula file
+        run: |
+          LATEST_DATA=$(cat release_data.yaml)
+          sed -i "s#url \".*\"#url \"$LATEST_DATA['url']\"#" ./Formula/envc.rb
+          sed -i "s#sha256 \".*\"#sha256 \"$LATEST_DATA['sha256']\"#" ./Formula/envc.rb
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "release: auto-update formula file"
+          git push
