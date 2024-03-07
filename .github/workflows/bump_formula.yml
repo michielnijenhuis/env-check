@@ -1,0 +1,21 @@
+name: Update Formula
+
+on:
+    push:
+        tags:
+            - '*'
+
+jobs:
+    update_formula:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Update Homebrew formula
+              uses: dawidd6/action-homebrew-bump-formula@v3
+              with:
+                  # Required, custom GitHub access token with the 'public_repo' and 'workflow' scopes
+                  token: ${{secrets.TOKEN}}
+                  user_name: Michiel Nijenhuis
+                  user_email: michiel.nijenhuis@gmail.com
+                  no_fork: false
+                  tap: michielnijenhuis/env-check
+                  formula: envc
