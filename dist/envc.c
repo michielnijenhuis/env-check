@@ -18,9 +18,9 @@
 //=== Defines ================================================================//
 #define ENVC_NAME "Env Check"
 
-#ifndef ENVC_VERSION
-# define ENVC_VERSION NULL
-#endif // ENVC_VERSION
+#ifndef VERSION
+# define VERSION NULL
+#endif // VERSION
 
 #define ENVC_ASCII_ART                                                                                                 \
     "\
@@ -137,7 +137,7 @@ int main(int argc, char **argv) {
 
     //=== Env Check ==========================================================//
     command_t *commands[] = {&compare_cmd, &list_cmd};
-    program_t  program    = program_create(ENVC_NAME, ENVC_VERSION);
+    program_t  program    = program_create(ENVC_NAME, VERSION);
     program_set_subcommands(&program, commands, ARRAY_LEN(commands));
     program_set_ascii_art(&program, ENVC_ASCII_ART);
 
